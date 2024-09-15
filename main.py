@@ -9,12 +9,14 @@ usersetting = my_col('user_settings')
 from bson.objectid import ObjectId
 
 
+from datetime import timedelta, datetime
+from dateutil.relativedelta import relativedelta  # This handles month increments correctly
+
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
     
     # Convert interest rate to decimal
     interest_rate_decimal = interest_rate / 100
-       
     
     while balance > 0:
         balance = min(balance, credit_limit)
@@ -42,7 +44,7 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
         # Record this month's data
         amortization_schedule.append({
             'month': current_date.strftime("%b %Y"),
-            'month_debt_free':current_date,
+            'month_debt_free': current_date,
             'balance': round(balance, 2),
             'total_payment': round(total_payment, 2),
             'snowball_amount': round(snowball_amount, 2),
@@ -50,10 +52,57 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
             'principle': round(principle, 2)
         })
         
-        # Move to the next month
-        current_date += timedelta(days=30)
+        # Move to the next month using relativedelta to increment by one month
+        current_date += relativedelta(months=1)
     
     return amortization_schedule
+
+
+# def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
+#     amortization_schedule = []
+    
+#     # Convert interest rate to decimal
+#     interest_rate_decimal = interest_rate / 100
+       
+    
+#     while balance > 0:
+#         balance = min(balance, credit_limit)
+        
+#         # Calculate interest for the current balance
+#         interest = balance * interest_rate_decimal / 12
+        
+#         # Calculate the maximum payment we can make considering the monthly budget
+#         payment = min(monthly_payment, monthly_budget)
+        
+#         # Calculate snowball amount
+#         snowball_amount = min(payment, balance + interest) - interest
+        
+#         # Calculate principal payment
+#         principle = snowball_amount
+#         principle = min(principle, balance)
+#         balance -= principle
+        
+#         if balance < 0:
+#             balance = 0
+        
+#         # Calculate total payment (principle + interest)
+#         total_payment = principle + interest
+        
+#         # Record this month's data
+#         amortization_schedule.append({
+#             'month': current_date.strftime("%b %Y"),
+#             'month_debt_free':current_date,
+#             'balance': round(balance, 2),
+#             'total_payment': round(total_payment, 2),
+#             'snowball_amount': round(snowball_amount, 2),
+#             'interest': round(interest, 2),
+#             'principle': round(principle, 2)
+#         })
+        
+#         # Move to the next month
+#         current_date += timedelta(days=30)
+    
+#     return amortization_schedule
 
 # Define sorting method (for example, Debt Snowball - lowest balance first)
 def sort_debts(debts, method):
@@ -140,6 +189,11 @@ def get_dept_amortization_schedule(accntid:str):
 def dropAndGenerateCollection(document_id):
     schedule = get_dept_amortization_schedule(str(document_id))
     collection_name = f"debt_{str(document_id)}"
+    schedule_len = len(schedule)
+    if schedule_len < 1:
+        if collection_name in mydb.list_collection_names():
+            mydb.drop_collection(collection_name)
+        return None
     # Drop the collection if it exists
     #clean first
     if collection_name in mydb.list_collection_names():
@@ -189,13 +243,14 @@ def process_changes():
                 # Check if the 'balance' field is present in the change event
                 if operation_type == 'update':
                     updated_fields = change['updateDescription']['updatedFields']
-                    fields = ['balance','interest_rate','monthly_payment','due_date']
+                    fields = ['balance','interest_rate','minimum_payment','highest_balance','monthly_payment','due_date','credit_limit']
                     if has_common_element(fields,updated_fields):
                         #print(f"Update operation: Balance changed to {updated_fields['balance']}")
                         print('updated field: ',updated_fields)
                         month_debt_free = dropAndGenerateCollection(document_id)
-                        print('month_debt_free:', month_debt_free)
-                        updateDebtFreeMonth(source_collection, document_id, month_debt_free)
+                        if month_debt_free != None:
+                            print('month_debt_free:', month_debt_free)
+                            updateDebtFreeMonth(source_collection, document_id, month_debt_free)
                     if 'deleted_at' in updated_fields:
                         dropOncaseDelete(document_id)
                 
