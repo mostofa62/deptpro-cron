@@ -201,9 +201,32 @@ def dropAndGenerateCollection(document_id):
         print(f"Collection '{collection_name}' dropped.")
     target_collection = my_col(collection_name)
     target_collection.insert_many(schedule)
-    latest_target_collection = target_collection.find_one({},{'month_debt_free':1},sort=[('month_debt_free', -1)])
-    month_debt_free = latest_target_collection['month_debt_free']
-    return month_debt_free
+    #latest_target_collection = target_collection.find_one({},{'month_debt_free':1},sort=[('month_debt_free', -1)])
+    #month_debt_free = latest_target_collection['month_debt_free']
+
+    pipeline = [
+    {
+        '$group': {
+            '_id': None,
+            'total_payment_sum': {'$sum': '$total_payment'},
+            'total_interest_sum': {'$sum': '$interest'},
+            'max_month_debt_free': {'$max': '$month_debt_free'}
+        }
+    }
+    ]
+    # Execute the aggregation
+    result = list(target_collection.aggregate(pipeline))
+    total_payment_sum = result[0]['total_payment_sum'] if result else 0
+    total_interest_sum = result[0]['total_interest_sum'] if result else 0
+    max_month_debt_free = result[0]['max_month_debt_free'] if result else None
+
+
+    return {
+        'month_debt_free':max_month_debt_free,
+        'total_payment_sum':total_payment_sum,
+        'total_interest_sum':total_interest_sum,
+        'months_to_payoff':schedule_len
+    }
 
 
 def dropOncaseDelete(document_id):
@@ -215,9 +238,9 @@ def dropOncaseDelete(document_id):
 def has_common_element(arr1, arr2):
     return any(elem in arr2 for elem in arr1)
 
-def updateDebtFreeMonth(source_collection,document_id,month_debt_free):
+def updateDebtFreeMonth(source_collection,document_id,month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum):
     upsert_query = {'_id': document_id}
-    update_fields = {'$set': {'month_debt_free': month_debt_free}}
+    update_fields = {'$set': {'month_debt_free': month_debt_free,'months_to_payoff':months_to_payoff,'total_payment_sum':total_payment_sum,'total_interest_sum':total_interest_sum}}
     source_collection.update_one(upsert_query, update_fields, upsert=True)
 
 def process_changes():
@@ -247,19 +270,27 @@ def process_changes():
                     if has_common_element(fields,updated_fields):
                         #print(f"Update operation: Balance changed to {updated_fields['balance']}")
                         print('updated field: ',updated_fields)
-                        month_debt_free = dropAndGenerateCollection(document_id)
-                        if month_debt_free != None:
+                        dynamic_data = dropAndGenerateCollection(document_id)
+                        month_debt_free = dynamic_data['month_debt_free']
+                        months_to_payoff = dynamic_data['months_to_payoff']
+                        total_payment_sum = dynamic_data['total_payment_sum']
+                        total_interest_sum = dynamic_data['total_interest_sum']
+                        if dynamic_data['month_debt_free'] != None:
                             print('month_debt_free:', month_debt_free)
-                            updateDebtFreeMonth(source_collection, document_id, month_debt_free)
+                            updateDebtFreeMonth(source_collection, document_id, month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum)
                     if 'deleted_at' in updated_fields:
                         dropOncaseDelete(document_id)
                 
                 elif operation_type == 'insert':
                     if 'balance' in full_document:
                         print(f"Insert operation: New balance is {full_document['balance']}")
-                        month_debt_free = dropAndGenerateCollection(document_id)
+                        dynamic_data = dropAndGenerateCollection(document_id)
+                        month_debt_free = dynamic_data['month_debt_free']
+                        months_to_payoff = dynamic_data['months_to_payoff']
+                        total_payment_sum = dynamic_data['total_payment_sum']
+                        total_interest_sum = dynamic_data['total_interest_sum']
                         print('month_debt_free:', month_debt_free)
-                        updateDebtFreeMonth(source_collection, document_id, month_debt_free)
+                        updateDebtFreeMonth(source_collection, document_id, month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum)
                 
                 elif operation_type == 'delete':
                     dropOncaseDelete(document_id)
