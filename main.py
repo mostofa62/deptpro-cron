@@ -1,16 +1,17 @@
-import threading
-import signal
-from datetime import datetime,timedelta
-from db import my_col,mydb
-from pymongo.errors import PyMongoError
-
-debt_accounts = my_col('debt_accounts')
-usersetting = my_col('user_settings')
-from bson.objectid import ObjectId
-
-
-from datetime import timedelta, datetime
+from dotenv import load_dotenv
+import os
+load_dotenv()
+from apscheduler.schedulers.background import BackgroundScheduler
+import time
+from datetime import datetime
 from dateutil.relativedelta import relativedelta  # This handles month increments correctly
+from dbpg import SessionLocal
+from db import my_col, mydb
+from models import DebtAccounts, UserSettings
+
+debt_accounts_log = my_col('debt_accounts_log')
+
+AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
@@ -58,51 +59,6 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
     return amortization_schedule
 
 
-# def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
-#     amortization_schedule = []
-    
-#     # Convert interest rate to decimal
-#     interest_rate_decimal = interest_rate / 100
-       
-    
-#     while balance > 0:
-#         balance = min(balance, credit_limit)
-        
-#         # Calculate interest for the current balance
-#         interest = balance * interest_rate_decimal / 12
-        
-#         # Calculate the maximum payment we can make considering the monthly budget
-#         payment = min(monthly_payment, monthly_budget)
-        
-#         # Calculate snowball amount
-#         snowball_amount = min(payment, balance + interest) - interest
-        
-#         # Calculate principal payment
-#         principle = snowball_amount
-#         principle = min(principle, balance)
-#         balance -= principle
-        
-#         if balance < 0:
-#             balance = 0
-        
-#         # Calculate total payment (principle + interest)
-#         total_payment = principle + interest
-        
-#         # Record this month's data
-#         amortization_schedule.append({
-#             'month': current_date.strftime("%b %Y"),
-#             'month_debt_free':current_date,
-#             'balance': round(balance, 2),
-#             'total_payment': round(total_payment, 2),
-#             'snowball_amount': round(snowball_amount, 2),
-#             'interest': round(interest, 2),
-#             'principle': round(principle, 2)
-#         })
-        
-#         # Move to the next month
-#         current_date += timedelta(days=30)
-    
-#     return amortization_schedule
 
 # Define sorting method (for example, Debt Snowball - lowest balance first)
 def sort_debts(debts, method):
@@ -128,82 +84,70 @@ def sort_debts(debts, method):
         return sorted(debts, key=lambda x: x['interest_rate'])
     else:
         raise ValueError("Unknown debt payoff method")
-
-def get_dept_amortization_schedule(accntid:str):
-
-    debtaccounts = debt_accounts.find_one(
-        {"_id":ObjectId(accntid)},
-        {
-        "_id":0,                
-        }        
-        )
-
-    balance = debtaccounts['balance']
-    #highest_balance = debtaccounts['highest_balance']
-    monthly_payment = debtaccounts['monthly_payment']
-    interest_rate = debtaccounts['interest_rate']
-    #monthly_interest = debtaccounts['monthly_interest']
-    credit_limit = debtaccounts['credit_limit']
-    current_date = debtaccounts['due_date']
-    #print(interest_rate)
-
-    user_setting = usersetting.find_one({'user_id':debtaccounts['user_id']},{'debt_payoff_method':1,'monthly_budget':1})
-    monthly_budget = user_setting['monthly_budget']
     
 
+def get_dept_amortization_schedule():
 
-    debt = {        
-        'balance': balance,
-        'interest_rate': interest_rate,
-        'monthly_payment': monthly_payment,
-        'credit_limit': credit_limit,
-        'current_date': current_date,
-        'monthly_budget': monthly_budget
+    debt_acc_query = {
+        "ammortization_at": None,                            
     }
 
-    schedule = calculate_amortization(
-        balance=debt['balance'],
-        interest_rate=debt['interest_rate'],
-        monthly_payment=debt['monthly_payment'],
-        credit_limit=debt['credit_limit'],
-        current_date=debt['current_date'],
-        monthly_budget=debt['monthly_budget']
-    )
+    debtaccounts = debt_accounts_log.find_one(
+        debt_acc_query       
+        )
 
-    # Add amortization schedule to debt dictionary
-    '''
-    debt['amortization_schedule'] = schedule
+    if debtaccounts:
+        balance = debtaccounts['balance']
+        #highest_balance = debtaccounts['highest_balance']
+        monthly_payment = debtaccounts['monthly_payment']
+        interest_rate = debtaccounts['interest_rate']
+        #monthly_interest = debtaccounts['monthly_interest']
+        credit_limit = debtaccounts['credit_limit']
+        current_date = debtaccounts['current_date']
 
-    # List of debts (single debt in this case)
-    debts = [debt]
+        monthly_budget = debtaccounts['user_monthly_budget']
+        
+    
+        debt = {        
+            'balance': balance,
+            'interest_rate': interest_rate,
+            'monthly_payment': monthly_payment,
+            'credit_limit': credit_limit,
+            'current_date': current_date,
+            'monthly_budget': monthly_budget
+        }
 
-    debt_payoff_method = user_setting['debt_payoff_method']['value']
-    sorted_debts = sort_debts(debts, debt_payoff_method)
+        schedule = calculate_amortization(
+            balance=debt['balance'],
+            interest_rate=debt['interest_rate'],
+            monthly_payment=debt['monthly_payment'],
+            credit_limit=debt['credit_limit'],
+            current_date=debt['current_date'],
+            monthly_budget=debt['monthly_budget']
+        )
 
-    return jsonify({
-        'rows':sorted_debts[0]['amortization_schedule']
-    })
-    '''
-    return schedule
+            
 
-def dropAndGenerateCollection(document_id):
-    schedule = get_dept_amortization_schedule(str(document_id))
+        return(schedule, debtaccounts)
+
+    
+    return ([],None)   
+
+
+
+def dropAndGenerateCollection(document_id:int,schedule):
     collection_name = f"debt_{str(document_id)}"
     schedule_len = len(schedule)
     if schedule_len < 1:
         if collection_name in mydb.list_collection_names():
             mydb.drop_collection(collection_name)
         return None
-    # Drop the collection if it exists
-    #clean first
+
     if collection_name in mydb.list_collection_names():
         mydb.drop_collection(collection_name)
         print(f"Collection '{collection_name}' dropped.")
     target_collection = my_col(collection_name)
     target_collection.insert_many(schedule)
-    #latest_target_collection = target_collection.find_one({},{'month_debt_free':1},sort=[('month_debt_free', -1)])
-    #month_debt_free = latest_target_collection['month_debt_free']
-
     pipeline = [
     {
         '$group': {
@@ -229,101 +173,97 @@ def dropAndGenerateCollection(document_id):
     }
 
 
+
+
+
 def dropOncaseDelete(document_id):
     collection_name = f"debt_{str(document_id)}"
     if collection_name in mydb.list_collection_names():
         mydb.drop_collection(collection_name)
         print(f"Collection '{collection_name}' dropped.")
 
-def has_common_element(arr1, arr2):
-    return any(elem in arr2 for elem in arr1)
 
-def updateDebtFreeMonth(source_collection,document_id,month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum):
-    upsert_query = {'_id': document_id}
-    update_fields = {'$set': {'month_debt_free': month_debt_free,'months_to_payoff':months_to_payoff,'total_payment_sum':total_payment_sum,'total_interest_sum':total_interest_sum}}
-    source_collection.update_one(upsert_query, update_fields, upsert=True)
+def updateDebtFreeMonth(
+                        document_id,
+                        month_debt_free, 
+                        months_to_payoff, 
+                        total_payment_sum,
+                        total_interest_sum,
+                        debt_id):
+    ammortization_at = datetime.now()
+    source_collection = debt_accounts_log
 
-def process_changes():
-#def process_changes(stop_event):
-    try:
-        
-        source_collection = debt_accounts
-        
-        
-        
-       # Define the pipeline to listen for insert, update, and delete operations
-        pipeline = [
-            {'$match': {'operationType': {'$in': ['insert', 'update', 'delete']}}}
-        ]
-        
-        with source_collection.watch(pipeline=pipeline) as stream:
-            for change in stream:
-                operation_type = change['operationType']
-                full_document = change.get('fullDocument', {})
-                document_key = change['documentKey']
-                document_id = document_key['_id']
-                
-                # Check if the 'balance' field is present in the change event
-                if operation_type == 'update':
-                    updated_fields = change['updateDescription']['updatedFields']
-                    fields = ['balance','interest_rate','minimum_payment','highest_balance','monthly_payment','due_date','credit_limit']
-                    if has_common_element(fields,updated_fields):
-                        #print(f"Update operation: Balance changed to {updated_fields['balance']}")
-                        print('updated field: ',updated_fields)
-                        dynamic_data = dropAndGenerateCollection(document_id)
-                        month_debt_free = dynamic_data['month_debt_free']
-                        months_to_payoff = dynamic_data['months_to_payoff']
-                        total_payment_sum = dynamic_data['total_payment_sum']
-                        total_interest_sum = dynamic_data['total_interest_sum']
-                        if dynamic_data['month_debt_free'] != None:
-                            print('month_debt_free:', month_debt_free)
-                            updateDebtFreeMonth(source_collection, document_id, month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum)
-                    if 'deleted_at' in updated_fields:
-                        dropOncaseDelete(document_id)
-                
-                elif operation_type == 'insert':
-                    if 'balance' in full_document:
-                        print(f"Insert operation: New balance is {full_document['balance']}")
-                        dynamic_data = dropAndGenerateCollection(document_id)
-                        month_debt_free = dynamic_data['month_debt_free']
-                        months_to_payoff = dynamic_data['months_to_payoff']
-                        total_payment_sum = dynamic_data['total_payment_sum']
-                        total_interest_sum = dynamic_data['total_interest_sum']
-                        print('month_debt_free:', month_debt_free)
-                        updateDebtFreeMonth(source_collection, document_id, month_debt_free, months_to_payoff, total_payment_sum,total_interest_sum)
-                
-                elif operation_type == 'delete':
-                    dropOncaseDelete(document_id)
-                    print(f"Delete operation: Document deleted with key {document_key}")
-                    # target_collection.delete_one({'_id': document_key['_id']})
+    with SessionLocal() as session:
+        debt_update = session.query(DebtAccounts).filter(DebtAccounts.id == debt_id).update(
+                {
+                    DebtAccounts.month_debt_free: month_debt_free,
+                    DebtAccounts.months_to_payoff:months_to_payoff,
+                    DebtAccounts.total_payment_sum:total_payment_sum,
+                    DebtAccounts.total_interest_sum:total_interest_sum,
+                    DebtAccounts.ammortization_at:ammortization_at
+                    #Income.calender_at: None
+                }, synchronize_session=False
+            )
+        if debt_update:
+            session.commit()       
+            upsert_query = {'_id': document_id}
+            update_fields = {'$set': 
+                            {'month_debt_free': month_debt_free,
+                            'months_to_payoff':months_to_payoff,
+                            'total_payment_sum':total_payment_sum,
+                            'total_interest_sum':total_interest_sum,
+                            'ammortization_at':ammortization_at
+                            }}
+            source_collection.update_one(upsert_query, update_fields, upsert=True)
 
-    except PyMongoError as e:
-        print(f"An error occurred: {e}")
-'''
-def start_thread(stop_event):
-    change_thread = threading.Thread(target=process_changes, args=(stop_event,))
-    change_thread.start()
-    return change_thread
 
-def signal_handler(signum, frame):
-    print("Signal received, shutting down...")
-    stop_event.set()
-'''
-if __name__ == "__main__":
-    process_changes()
-    '''
-    stop_event = threading.Event()
+
+
+
+def process_update():
+   
+    schedules = get_dept_amortization_schedule()    
+    schedule = schedules[0]
+    debtaccounts = schedules[1]
+    print('debtaccounts',debtaccounts)
+    if len(schedule) > 0 and debtaccounts!=None:
+        document_id = debtaccounts['_id']
+        dept_id = int(debtaccounts['debt_id'])
+        dynamic_data = dropAndGenerateCollection(dept_id,schedule)
+        month_debt_free = dynamic_data['month_debt_free']
+        months_to_payoff = dynamic_data['months_to_payoff']
+        total_payment_sum = dynamic_data['total_payment_sum']
+        total_interest_sum = dynamic_data['total_interest_sum']
+        if dynamic_data['month_debt_free'] != None:
+            print('month_debt_free:', month_debt_free)
+            updateDebtFreeMonth(
+                                document_id, 
+                                month_debt_free, 
+                                months_to_payoff, 
+                                total_payment_sum,
+                                total_interest_sum,
+                                dept_id
+                                )
+
+    #print('Schedule', schedule)
+
+# if __name__ == "__main__":
+#     #process_changes()
+#     process_update()
     
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler) # Handle termination signals
-    
-    thread = start_thread(stop_event)
-    
-    try:
-        thread.join()
-    except KeyboardInterrupt:
-        print("Interrupted by user")
-    finally:
-        print("Shutting down")
-    '''
+# Initialize scheduler
+scheduler = BackgroundScheduler()
+
+# Schedule the query execution every 10 seconds
+scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL)
+
+# Start the scheduler
+scheduler.start()
+
+# Keep the program running
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    scheduler.shutdown()
+    print("Scheduler stopped.")
