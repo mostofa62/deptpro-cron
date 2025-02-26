@@ -8,10 +8,12 @@ from dateutil.relativedelta import relativedelta  # This handles month increment
 from dbpg import SessionLocal
 from db import my_col, mydb
 from models import DebtAccounts, UserSettings
+from incometransactions import income_transaction_processing
 
 debt_accounts_log = my_col('debt_accounts_log')
 
 AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
+INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
 
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
@@ -255,7 +257,10 @@ def process_update():
 scheduler = BackgroundScheduler()
 
 # Schedule the query execution every 10 seconds
-scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL)
+#scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
+
+scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
+scheduler.add_job(income_transaction_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
 
 # Start the scheduler
 scheduler.start()
