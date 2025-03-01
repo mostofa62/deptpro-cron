@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import update
+from sqlalchemy import func, update
 from models import Income, IncomeBoost, IncomeMonthlyLog, IncomeTransaction, IncomeYearlyLog
 from dbpg import SessionLocal
 from db import my_col
@@ -27,7 +27,9 @@ def income_transaction_processing():
                 "finished_at": None,                                
     }
     total_gross_income = 0
-    total_net_income = 0    
+    total_net_income = 0 
+    total_monthly_gross_income = 0
+    total_monthly_net_income = 0   
     income_log_data = income_accounts_logs.find_one(income_acc_query)
     income_transaction_data = []
     
@@ -50,6 +52,17 @@ def income_transaction_processing():
         total_net_income = income['total_net_income']
         boost = income_log_data['boost']
 
+        total_m_gross_income, total_m_net_income = (result := session.query(
+                        func.sum(IncomeMonthlyLog.total_monthly_gross_income), 
+                    func.sum(IncomeMonthlyLog.total_monthly_net_income)
+                ).filter(IncomeMonthlyLog.user_id == user_id).first()) and tuple(map(lambda x: x or 0, result)) or (0, 0)
+
+
+        total_y_gross_income, total_y_net_income = (result := session.query(
+            func.sum(IncomeYearlyLog.total_yearly_gross_income), 
+            func.sum(IncomeYearlyLog.total_yearly_net_income)
+        ).filter(IncomeYearlyLog.user_id == user_id).first()) and tuple(map(lambda x: x or 0, result)) or (0, 0)
+
 
         if income['completed_at']==None:
             income_transaction_generate = generate_new_transaction_data_for_income(
@@ -66,6 +79,10 @@ def income_transaction_processing():
             total_net_income = income_transaction_generate['total_net_for_period']
             next_pay_date = income_transaction_generate['next_pay_date']
             is_single = income_transaction_generate['is_single']
+            total_monthly_gross_income = income_transaction_generate['total_monthly_gross_income']
+            total_monthly_net_income = income_transaction_generate['total_monthly_net_income']
+            total_yearly_gross_income = income_transaction_generate['total_yearly_gross_income']
+            total_yearly_net_income = income_transaction_generate['total_yearly_net_income']
 
             income_transaction_data = None
             try:
@@ -80,7 +97,11 @@ def income_transaction_processing():
 
                     stmt_update = update(Income).where(Income.id == income_id).values(
                             total_gross_income=total_gross_income,
-                            total_net_income=total_net_income,                   
+                            total_net_income=total_net_income,
+                            total_monthly_gross_income=total_monthly_gross_income,
+                            total_monthly_net_income = total_monthly_net_income,
+                            total_yearly_gross_income = total_yearly_gross_income,
+                            total_yearly_net_income = total_yearly_net_income,                   
                             next_pay_date=next_pay_date,                      
                             commit=commit,  # Replace with the actual commit value                    
                         )

@@ -279,7 +279,10 @@ def generate_new_transaction_data_for_income(
 
     total_gross_for_period = 0
     total_net_for_period = 0
-
+    total_monthly_gross_income = 0
+    total_monthly_net_income = 0
+    total_yearly_gross_income = 0
+    total_yearly_net_income = 0
 
     
     next_pay_date = current_date + delta
@@ -287,7 +290,7 @@ def generate_new_transaction_data_for_income(
     current_datetime_now = datetime.now()
     is_single = 0
 
-    if current_datetime_now < next_pay_date:
+    if current_datetime_now <= next_pay_date:
         
         is_single = 1
         total_gross_for_period +=  gross_input
@@ -299,9 +302,11 @@ def generate_new_transaction_data_for_income(
 
         month = current_date.strftime("%Y-%m")
         month_word = current_date.strftime("%b, %Y")
+        month_number = int(current_date.strftime("%Y%m"))
         income_transaction = {
                 'month_word':month_word,
                 'month':month,
+                'month_number':month_number,
                 'pay_date':current_date,
                 "next_pay_date":next_pay_date,
                 'gross_income':gross_input,                
@@ -316,6 +321,25 @@ def generate_new_transaction_data_for_income(
                 "closed_at":None            
                 
             }
+        if month_number == int(current_datetime_now.strftime('%Y%m')):
+            total_monthly_gross_income += gross_input
+            total_monthly_net_income += net_input
+
+        if int(month_number/100) == current_datetime_now.year:
+            total_yearly_gross_income += gross_input
+            total_yearly_net_income += net_input  
+        
+        return ({
+            'income_transaction':income_transaction,
+            'total_gross_for_period':total_gross_for_period,
+            'total_net_for_period':total_net_for_period,
+            'total_monthly_gross_income':total_monthly_gross_income,
+            'total_monthly_net_income':total_monthly_net_income,
+            'total_yearly_gross_income':total_yearly_gross_income,
+            'total_yearly_net_income':total_yearly_net_income,         
+            'next_pay_date':next_pay_date,
+            'is_single':is_single
+        })
 
     
 
@@ -336,12 +360,13 @@ def generate_new_transaction_data_for_income(
 
             month = current_date.strftime("%Y-%m")
             month_word = current_date.strftime("%b, %Y")
-            
+            month_number = int(current_date.strftime("%Y%m"))
 
 
             income_transaction.append({
                 'month_word':month_word,
                 'month':month,
+                'month_number':month_number,
                 'pay_date':current_date,
                 "next_pay_date":next_pay_date,
                 'gross_income':gross_input,                
@@ -357,20 +382,29 @@ def generate_new_transaction_data_for_income(
                 
             })
 
-             # Move to the next period based on base income frequency
+            if month_number == int(current_datetime_now.strftime('%Y%m')):
+                total_monthly_gross_income += gross_input
+                total_monthly_net_income += net_input
+
+
+            if int(month_number/100) == current_datetime_now.year:
+                total_yearly_gross_income += gross_input
+                total_yearly_net_income += net_input  
+
+            # Move to the next period based on base income frequency
             current_date = next_pay_date
-
-
-   
         
-
-    return ({
-        'income_transaction':income_transaction,
-        'total_gross_for_period':total_gross_for_period,
-        'total_net_for_period':total_net_for_period,         
-        'next_pay_date':next_pay_date,
-        'is_single':is_single
-    })
+        return ({
+            'income_transaction':income_transaction,
+            'total_gross_for_period':total_gross_for_period,
+            'total_net_for_period':total_net_for_period,
+            'total_monthly_gross_income':total_monthly_gross_income,
+            'total_monthly_net_income':total_monthly_net_income,
+            'total_yearly_gross_income':total_yearly_gross_income,
+            'total_yearly_net_income':total_yearly_net_income,         
+            'next_pay_date':next_pay_date,
+            'is_single':is_single
+        })
 
 
 
