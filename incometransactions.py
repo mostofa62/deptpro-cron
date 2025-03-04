@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import func, update
-from models import Income, IncomeBoost, IncomeMonthlyLog, IncomeTransaction, IncomeYearlyLog
+from models import AppData, Income, IncomeBoost, IncomeMonthlyLog, IncomeTransaction, IncomeYearlyLog
 from dbpg import SessionLocal
 from db import my_col
 
@@ -29,7 +29,20 @@ def income_transaction_processing():
     total_gross_income = 0
     total_net_income = 0 
     total_monthly_gross_income = 0
-    total_monthly_net_income = 0   
+    total_monthly_net_income = 0
+    total_yearly_gross_income = 0
+    total_yearly_net_income = 0
+
+    p_total_yearly_gross_income = 0
+    p_total_yearly_net_income = 0
+    p_total_monthly_gross_income = 0
+    p_total_monthly_net_income = 0 
+
+    pb_total_yearly_gross_income = 0
+    pb_total_yearly_net_income = 0
+    pb_total_monthly_gross_income = 0
+    pb_total_monthly_net_income = 0
+
     income_log_data = income_accounts_logs.find_one(income_acc_query)
     income_transaction_data = []
     
@@ -50,18 +63,16 @@ def income_transaction_processing():
         income = income_log_data['income']
         total_gross_income = income['total_gross_income']
         total_net_income = income['total_net_income']
-        boost = income_log_data['boost']
 
-        total_m_gross_income, total_m_net_income = (result := session.query(
-                        func.sum(IncomeMonthlyLog.total_monthly_gross_income), 
-                    func.sum(IncomeMonthlyLog.total_monthly_net_income)
-                ).filter(IncomeMonthlyLog.user_id == user_id).first()) and tuple(map(lambda x: x or 0, result)) or (0, 0)
+        p_total_yearly_gross_income = income['p_total_yearly_gross_income']
+        p_total_yearly_net_income = income['p_total_yearly_net_income']
+        p_total_monthly_gross_income = income['p_total_monthly_gross_income']
+        p_total_monthly_net_income = income['p_total_monthly_net_income']
+
+        
 
 
-        total_y_gross_income, total_y_net_income = (result := session.query(
-            func.sum(IncomeYearlyLog.total_yearly_gross_income), 
-            func.sum(IncomeYearlyLog.total_yearly_net_income)
-        ).filter(IncomeYearlyLog.user_id == user_id).first()) and tuple(map(lambda x: x or 0, result)) or (0, 0)
+        boost = income_log_data['boost']        
 
 
         if income['completed_at']==None:
@@ -89,7 +100,7 @@ def income_transaction_processing():
                 if len(income_transaction_list) > 0:
                     # Insert transactions into the database
                     if is_single > 0:
-                        income_transaction_data = IncomeTransaction(**income_transaction_list[0])
+                        income_transaction_data = IncomeTransaction(**income_transaction_list)
                         session.add(income_transaction_data)
                     else:
                         income_transaction_data = [IncomeTransaction(**txn) for txn in income_transaction_list]
@@ -111,7 +122,11 @@ def income_transaction_processing():
 
                     update_data = {
                             "total_gross_income":total_gross_income,
-                            "total_net_income":total_net_income,                            
+                            "total_net_income":total_net_income,
+                            "total_monthly_gross_income":total_monthly_gross_income,
+                            "total_monthly_net_income":total_monthly_net_income,
+                            "total_yearly_gross_income":total_yearly_gross_income,
+                            "total_yearly_net_income":total_yearly_net_income,                                                        
                             "completed_at":datetime.now()
                     }
 
@@ -133,10 +148,13 @@ def income_transaction_processing():
             except Exception as ex:
                 print('Income Update Exception: ', ex)
                 session.rollback()
+                return
 
 
 
         if len(boost) > 0:
+
+            
 
             for k,b in boost.items():
                 print(k,b)
@@ -151,6 +169,11 @@ def income_transaction_processing():
                 repeat_boost =b['repeat_boost']
                 income_boost_id = b['id']
                 income_boost = b['contribution']
+                pb_total_yearly_gross_income += b['p_total_yearly_gross_income']
+                pb_total_yearly_net_income += b['p_total_yearly_net_income']
+                pb_total_monthly_gross_income += b['p_total_monthly_gross_income']
+                pb_total_monthly_net_income += b['p_total_monthly_net_income']
+                
                 
 
                 if pay_date_boost <= today:
@@ -175,19 +198,36 @@ def income_transaction_processing():
                         total_net_income = contribution_data['total_net_for_period']
                         next_contribution_date_b = contribution_data['next_pay_date']
                         is_single = contribution_data['is_single']
+                        total_monthly_gross_income_b = contribution_data['total_monthly_gross_income']
+                        total_monthly_net_income_b = contribution_data['total_monthly_net_income']
+                        total_yearly_gross_income_b = contribution_data['total_yearly_gross_income']
+                        total_yearly_net_income_b = contribution_data['total_yearly_net_income']
 
                         # Update the boost status
                         boost_status = {
                             'id': income_boost_id,
                             'next_pay_date_boost': next_contribution_date_b,
                             'total_balance': total_balance_b,
+                            'total_monthly_gross_income':total_monthly_gross_income_b,
+                            'total_monthly_net_income':total_monthly_net_income_b,
+                            'total_yearly_gross_income':total_yearly_gross_income_b,
+                            'total_yearly_net_income':total_yearly_net_income_b,
                             'closed_at': None
                         }
+
+                        total_monthly_gross_income += total_monthly_gross_income_b
+                        total_monthly_net_income += total_monthly_net_income_b
+                        total_yearly_gross_income += total_yearly_gross_income_b
+                        total_yearly_net_income += total_yearly_net_income_b
 
                         # Update the income record
                         update_data = {
                             "total_net_income": total_net_income,            
-                            'total_gross_income': total_gross_income,       
+                            'total_gross_income': total_gross_income,
+                            'total_monthly_gross_income' :total_monthly_gross_income,
+                            'total_monthly_net_income':total_monthly_net_income,
+                            'total_yearly_gross_income':total_yearly_gross_income,
+                            'total_yearly_net_income':total_yearly_net_income,       
                             'updated_at': datetime.now()              
                         }
 
@@ -203,6 +243,10 @@ def income_transaction_processing():
                             session.query(IncomeBoost).filter_by(id=boost_status['id']).update({
                                 'next_pay_date_boost': boost_status['next_pay_date_boost'],
                                 'total_balance': boost_status['total_balance'],
+                                'total_monthly_gross_income': boost_status['total_monthly_gross_income'],
+                                'total_monthly_net_income': boost_status['total_monthly_net_income'],
+                                'total_yearly_gross_income': boost_status['total_yearly_gross_income'],
+                                'total_yearly_net_income': boost_status['total_yearly_net_income'],                        
                                 'closed_at': boost_status['closed_at']
                             })
 
@@ -210,7 +254,11 @@ def income_transaction_processing():
                             session.commit()
                             #update in mongo side
                             update_data = {
-                                    "total_balance":total_balance_b,                                    
+                                    "total_balance":total_balance_b,
+                                    'total_monthly_gross_income':total_monthly_gross_income_b,
+                                    'total_monthly_net_income':total_monthly_net_income_b,
+                                    'total_yearly_gross_income':total_yearly_gross_income_b,
+                                    'total_yearly_net_income':total_yearly_net_income_b,                                    
                                     "completed_at":datetime.now()
                             }
 
@@ -220,6 +268,7 @@ def income_transaction_processing():
                         except Exception as ex:
                             print('Income Boost Save Exception: ',ex)
                             session.rollback()
+                            return
 
 
 
@@ -238,6 +287,10 @@ def income_transaction_processing():
                         total_gross_income = contribution_breakdown_b['total_gross_for_period']
                         total_net_income = contribution_breakdown_b['total_net_for_period']
                         next_contribution_date_b = contribution_breakdown_b['next_pay_date']
+                        total_monthly_gross_income_b = contribution_breakdown_b['total_monthly_gross_income']
+                        total_monthly_net_income_b = contribution_breakdown_b['total_monthly_net_income']
+                        total_yearly_gross_income_b = contribution_breakdown_b['total_yearly_gross_income']
+                        total_yearly_net_income_b = contribution_breakdown_b['total_yearly_net_income']
 
                             
 
@@ -254,15 +307,31 @@ def income_transaction_processing():
                             'id': income_boost_id,
                             'next_pay_date_boost': next_contribution_date_b,
                             'total_balance': total_balance_b,
+                            'total_monthly_gross_income' :total_monthly_gross_income_b,
+                            'total_monthly_net_income':total_monthly_net_income_b,
+                            'total_yearly_gross_income':total_yearly_gross_income_b,
+                            'total_yearly_net_income':total_yearly_net_income_b,
                             'closed_at': None
                         }
+
+                        total_monthly_gross_income += total_monthly_gross_income_b
+                        total_monthly_net_income += total_monthly_net_income_b
+                        total_yearly_gross_income += total_yearly_gross_income_b
+                        total_yearly_net_income += total_yearly_net_income_b
 
                         # Update the income record
                         update_data = {
                             "total_net_income": total_net_income,            
-                            'total_gross_income': total_gross_income,       
+                            'total_gross_income': total_gross_income,
+                            'total_monthly_gross_income' :total_monthly_gross_income,
+                            'total_monthly_net_income':total_monthly_net_income,
+                            'total_yearly_gross_income':total_yearly_gross_income,
+                            'total_yearly_net_income':total_yearly_net_income,       
                             'updated_at': datetime.now()              
                         }
+
+                        print('Single Boost',update_data)        
+                        
 
                         try:
 
@@ -271,6 +340,10 @@ def income_transaction_processing():
                             session.query(IncomeBoost).filter_by(id=boost_status['id']).update({
                                 'next_pay_date_boost': boost_status['next_pay_date_boost'],
                                 'total_balance': boost_status['total_balance'],
+                                'total_monthly_gross_income': boost_status['total_monthly_gross_income'],
+                                'total_monthly_net_income': boost_status['total_monthly_net_income'],
+                                'total_yearly_gross_income': boost_status['total_yearly_gross_income'],
+                                'total_yearly_net_income': boost_status['total_yearly_net_income'],                        
                                 'closed_at': boost_status['closed_at']
                             })
 
@@ -280,7 +353,11 @@ def income_transaction_processing():
 
                             #update in mongo side
                             update_data = {
-                                    "total_balance":total_balance_b,                                    
+                                    "total_balance":total_balance_b,
+                                    'total_monthly_gross_income':total_monthly_gross_income_b,
+                                    'total_monthly_net_income':total_monthly_net_income_b,
+                                    'total_yearly_gross_income':total_yearly_gross_income_b,
+                                    'total_yearly_net_income':total_yearly_net_income_b,                                    
                                     "completed_at":datetime.now()
                             }
                             merged_dict  = {**b,**update_data}                            
@@ -291,6 +368,7 @@ def income_transaction_processing():
                                                                 
                             print('Income Boost Save Exception: ',ex)                        
                             session.rollback()
+                            return
 
 
             newvalues = { "$set":  {
@@ -307,13 +385,34 @@ def income_transaction_processing():
 
         try:
 
-            # Log the monthly and yearly logs (if needed)
-            session.query(IncomeMonthlyLog).filter_by(income_id=income_id).update({
-                'updated_at': None
-            })
-            session.query(IncomeYearlyLog).filter_by(income_id=income_id).update({
-                'updated_at': None
-            })
+            # # Log the monthly and yearly logs (if needed)
+            # session.query(IncomeMonthlyLog).filter_by(income_id=income_id).update({
+            #     'updated_at': None
+            # })
+            # session.query(IncomeYearlyLog).filter_by(income_id=income_id).update({
+            #     'updated_at': None
+            # })
+            
+
+            app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
+
+            app_data.total_yearly_gross_income -= p_total_yearly_gross_income
+            app_data.total_yearly_net_income -= p_total_yearly_net_income
+            app_data.total_monthly_gross_income -= p_total_monthly_gross_income
+            app_data.total_monthly_net_income -= p_total_monthly_net_income
+
+            print('app_data deletion mode', app_data)
+
+            app_data.total_yearly_gross_income += total_yearly_gross_income
+            app_data.total_yearly_net_income += total_yearly_net_income
+            app_data.total_monthly_net_income += total_monthly_net_income
+            app_data.total_monthly_gross_income +=total_monthly_gross_income
+
+            print('app_data addition mode', app_data)
+
+            session.add(app_data)
+
+            session.commit()
 
             newvalues = { "$set":  
                          {

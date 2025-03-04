@@ -133,28 +133,33 @@ class Income(Base):
     net_income = Column(Float, nullable=False, default=0.0)
     pay_date = Column(DateTime, nullable=False)
     repeat = Column(JSON, nullable=False)  # Change this to JSON
-    note = Column(String, nullable=True, default="")
+    note = Column(String, nullable=True, default=None)
     total_net_income = Column(Float, nullable=True, default=0.0)
     total_gross_income = Column(Float, nullable=True, default=0.0)
-    created_at = Column(DateTime, nullable=False, default=datetime.now())
-    updated_at = Column(DateTime, nullable=False, default=datetime.now(), onupdate=datetime.now())
-    closed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)    
     next_pay_date = Column(DateTime, nullable=True)
-    commit = Column(DateTime, nullable=False, default=datetime.now())
+    commit = Column(DateTime, nullable=True,index=True)
     total_monthly_gross_income = Column(Float, nullable=True, default=0.0)
     total_monthly_net_income = Column(Float, nullable=True, default=0.0)
     total_yearly_gross_income = Column(Float, nullable=True, default=0.0)
     total_yearly_net_income = Column(Float, nullable=True, default=0.0)
-    calender_at = Column(DateTime, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    calender_at = Column(DateTime, nullable=True,index=True)
+    deleted_at = Column(DateTime, nullable=True,index=True)
+    closed_at = Column(DateTime, nullable=True,index=True)
 
     # Relationships
     user = relationship("User", backref="incomes", lazy="joined")
-    income_source = relationship("IncomeSourceType", backref="incomes", lazy="joined")
+    income_source = relationship(
+        "IncomeSourceType", 
+        backref="incomes", 
+        lazy="joined",
+        foreign_keys=[income_source_id]
+        )
 
     def __repr__(self):
         return f"<Income id={self.id} user_id={self.user_id} income_source_id={self.income_source_id} gross_income={self.gross_income}>"
-    
+  
 
 class IncomeBoost(Base):
     __tablename__ = "income_boosts"
@@ -168,12 +173,16 @@ class IncomeBoost(Base):
     pay_date_boost = Column(DateTime, nullable=False)
     repeat_boost = Column(JSON, nullable=False)  # Change this to JSON
     note = Column(String, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.now())
-    updated_at = Column(DateTime, nullable=False, default=datetime.now(), onupdate=datetime.now())
-    deleted_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    closed_at = Column(DateTime, nullable=True, index=True)
     next_pay_date_boost = Column(DateTime, nullable=True)
     total_balance = Column(Float, nullable=True, default=0.0)  # Total balance after applying boost
+    total_monthly_gross_income = Column(Float, nullable=True, default=0.0)
+    total_monthly_net_income = Column(Float, nullable=True, default=0.0)
+    total_yearly_gross_income = Column(Float, nullable=True, default=0.0)
+    total_yearly_net_income = Column(Float, nullable=True, default=0.0)
 
     # Relationships
     user = relationship("User", backref="income_boosts", lazy="joined")
@@ -187,10 +196,8 @@ class IncomeBoost(Base):
 class IncomeTransaction(Base):
     __tablename__ = "income_transactions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    month_word = Column(String, nullable=False)  # Example: "Dec, 2024"
-    month = Column(String, nullable=False, index=True)  # Example: "2024-12"
-    month_number = Column(Integer, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)    
+    month = Column(Integer, nullable=False,index=True)
     pay_date = Column(DateTime, nullable=False)
     next_pay_date = Column(DateTime, nullable=True)
     gross_income = Column(Float, nullable=False, default=0.0)
@@ -200,9 +207,8 @@ class IncomeTransaction(Base):
     income_id = Column(Integer, ForeignKey("incomes.id", ondelete="SET NULL"), nullable=True)  # Relating to incomes table
     income_boost_id = Column(Integer, ForeignKey("income_boosts.id", ondelete="SET NULL"), nullable=True)  # Relating to income_boosts table (nullable)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Relating to users table
-    commit = Column(DateTime, nullable=False, default=datetime.now())
-    deleted_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
+    commit = Column(DateTime, nullable=True,index=True)
+    
 
     # Relationships
     income = relationship("Income", backref="income_transactions", lazy="joined",foreign_keys=[income_id])
