@@ -385,7 +385,7 @@ class DebtAccounts(Base):
     __tablename__ = 'debt_accounts'
 
     id = Column(Integer, primary_key=True)
-    # name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False)
     #debt_type_id = Column(Integer, ForeignKey('debt_types.id', ondelete='SET NULL'), nullable=True)
     # payor = Column(String(100), nullable=True)
     balance = Column(Float, nullable=True)
@@ -420,7 +420,7 @@ class DebtAccounts(Base):
     month_debt_free = Column(DateTime, nullable=True)
     total_payment_sum = Column(Float, nullable=True)
     total_interest_sum = Column(Float, nullable=True)
-    # calender_at = Column(DateTime, nullable=True)
+    calender_at = Column(DateTime, nullable=True)
     ammortization_at = Column(DateTime, nullable=True)
 
     # debt_type = relationship(

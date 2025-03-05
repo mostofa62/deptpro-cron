@@ -9,12 +9,13 @@ from dbpg import SessionLocal
 from db import my_col, mydb
 from models import DebtAccounts, UserSettings
 from incometransactions import income_transaction_processing
+from calenderscheduler import calender_entry
 
 debt_accounts_log = my_col('debt_accounts_log')
 
 AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
-
+CALENDER_ENTRY_DURATION = int(os.getenv("CALENDER_ENTRY_DURATION",10))
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
     
@@ -261,6 +262,8 @@ scheduler = BackgroundScheduler()
 
 scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
 scheduler.add_job(income_transaction_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
+
+scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
 
 # Start the scheduler
 scheduler.start()
