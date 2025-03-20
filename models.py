@@ -500,6 +500,7 @@ class Saving(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    admin_id = Column(Integer,nullable=True)
     category_id = Column(Integer, ForeignKey('saving_categories.id'), nullable=False)
     savings_strategy = Column(JSON, nullable=False)
     saver = Column(String(10), nullable=False)
@@ -513,8 +514,8 @@ class Saving(Base):
     increase_contribution_by = Column(Float, nullable=True, default=0)
     repeat = Column(JSON, nullable=False)
     note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.now(), nullable=False)
-    updated_at = Column(DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
     goal_reached = Column(Boolean, nullable=True)
@@ -527,7 +528,12 @@ class Saving(Base):
     calender_at = Column(DateTime, nullable=True)
     total_monthly_balance = Column(Float, nullable=False, default=0)
 
-    category = relationship('SavingCategory', backref='savings', lazy='joined')
+    category = relationship(
+        'SavingCategory', 
+        backref='savings', 
+        lazy='joined',
+        foreign_keys=[category_id]
+        )
     user = relationship('User', backref='savings', lazy='joined')
 
     def __repr__(self):
@@ -554,6 +560,7 @@ class SavingBoost(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    admin_id = Column(Integer,nullable=True)
     saving_id = Column(Integer, ForeignKey('savings.id'), nullable=False)
     saver = Column(String(10), nullable=False)
     saving_boost = Column(Float, nullable=False)
@@ -568,9 +575,20 @@ class SavingBoost(Base):
     closed_at = Column(DateTime, nullable=True)
     next_contribution_date = Column(DateTime, nullable=True)
     total_balance = Column(Float, nullable=False, default=0)
+    total_monthly_balance = Column(Float, nullable=False, default=0)
 
-    saving = relationship('Saving', backref='saving_boosts', lazy='select')
-    saving_boost_source = relationship('SavingBoostType', backref='saving_boosts', lazy='select')
+    saving = relationship(
+        'Saving',
+         backref='saving_boosts', 
+         lazy='select',
+         foreign_keys=[saving_id]
+    )
+    saving_boost_source = relationship(
+        'SavingBoostType', 
+        backref='saving_boosts', 
+        lazy='select',
+        foreign_keys=[saving_boost_source_id]
+    )
     user = relationship('User', backref='saving_boosts', lazy=True)
 
     def __repr__(self):
@@ -586,8 +604,7 @@ class SavingContribution(Base):
     saving_boost_id = Column(Integer, ForeignKey('saving_boosts.id'), nullable=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     period = Column(Integer, nullable=False)
-    month = Column(String, nullable=False, index=True)
-    month_word = Column(String(20), nullable=False)
+    month = Column(Integer, nullable=False,index=True)    
     interest = Column(Float, nullable=False)
     interest_xyz = Column(Float, nullable=False)
     contribution = Column(Float, nullable=False)
@@ -601,13 +618,21 @@ class SavingContribution(Base):
     progress = Column(Float, nullable=False)
     progress_xyz = Column(Float, nullable=False)
     contribution_date = Column(DateTime, nullable=False)
-    next_contribution_date = Column(DateTime, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
-    commit = Column(DateTime, nullable=False, default=datetime.now())
+    next_contribution_date = Column(DateTime, nullable=False)    
+    commit = Column(DateTime, nullable=True,index=True)
 
-    saving = relationship('Saving', backref='saving_contributions', lazy='joined')
-    saving_boost = relationship('SavingBoost', backref='saving_contributions', lazy='joined')
+    saving = relationship(
+        'Saving', 
+        backref='saving_contributions', 
+        lazy='joined',
+        foreign_keys=[saving_id]
+    )
+    saving_boost = relationship(
+        'SavingBoost', 
+        backref='saving_contributions', 
+        lazy='joined',
+        foreign_keys=[saving_boost_id]
+    )
     user = relationship('User', backref='saving_contributions', lazy='joined')
 
     def __repr__(self):
