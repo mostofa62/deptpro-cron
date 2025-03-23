@@ -9,6 +9,7 @@ from dbpg import SessionLocal
 from db import my_col, mydb
 from models import DebtAccounts, UserSettings
 from incometransactions import income_transaction_processing
+from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
 
 debt_accounts_log = my_col('debt_accounts_log')
@@ -253,15 +254,24 @@ def process_update():
 # if __name__ == "__main__":
 #     #process_changes()
 #     process_update()
+
+def income_and_saving_processing():
+    print('INCOME PROCESSING')
+    income_transaction_processing()
+    time.sleep(1)
+    print('SAVING PROCESSING')
+    saving_contribution_processing()
     
 # Initialize scheduler
 scheduler = BackgroundScheduler()
+
+
 
 # Schedule the query execution every 10 seconds
 #scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
 
 scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
-scheduler.add_job(income_transaction_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
+scheduler.add_job(income_and_saving_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
 
 scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
 

@@ -35,13 +35,15 @@ def saving_contribution_processing():
     progress = 0
     period = 0
     goal_reached = None
+    next_contribution_date = None
 
     p_total_balance = 0
     p_total_balance_xyz = 0
     p_total_monthly_balance = 0
    
 
-    pb_total_balance = 0    
+    pb_total_balance = 0
+    pb_total_balance_xyz = 0    
     pb_total_monthly_balance = 0
 
     saving_log_data = saving_accounts_logs.find_one(saving_acc_query)
@@ -100,7 +102,9 @@ def saving_contribution_processing():
             goal_reached = contribution_breakdown['goal_reached']
             period = contribution_breakdown['period']
             is_single = contribution_breakdown['is_single']
-            total_monthly_balance_xyz = contribution_breakdown['total_monthly_balance_xyz']
+            total_monthly_balance = contribution_breakdown['total_monthly_balance_xyz']
+
+            print('next_contribution_date',next_contribution_date)
 
             len_breakdown = len(breakdown)
 
@@ -133,7 +137,8 @@ def saving_contribution_processing():
                     stmt_update = update(Saving).where(Saving.id == saving_id).values(
                             total_balance = total_balance,
                             total_balance_xyz = total_balance_xyz,
-                            total_monthly_balance = total_monthly_balance_xyz,                   
+                            total_monthly_balance = total_monthly_balance,
+                            next_contribution_date = next_contribution_date,                   
                             progress = progress,
                             period = period,
                             commit=commit,  # Replace with the actual commit value                    
@@ -145,7 +150,7 @@ def saving_contribution_processing():
                     update_data = {
                             "total_balance":total_balance,
                             "total_balance_xyz":total_balance_xyz,
-                            "total_monthly_balance":total_monthly_balance_xyz,                            
+                            "total_monthly_balance":total_monthly_balance,                            
                             "completed_at":datetime.now()
                     }
 
@@ -170,7 +175,7 @@ def saving_contribution_processing():
                 return
 
 
-
+        '''
         if len(boost) > 0:
 
             
@@ -401,31 +406,19 @@ def saving_contribution_processing():
                 newvalues
             )                 
 
-
+        '''
         try:
 
-            # # Log the monthly and yearly logs (if needed)
-            # session.query(IncomeMonthlyLog).filter_by(saving_id=saving_id).update({
-            #     'updated_at': None
-            # })
-            # session.query(IncomeYearlyLog).filter_by(saving_id=saving_id).update({
-            #     'updated_at': None
-            # })
             
 
             app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
 
-            app_data.total_yearly_gross_saving -= p_total_yearly_gross_saving
-            app_data.total_yearly_net_saving -= p_total_yearly_net_saving
-            app_data.total_monthly_gross_saving -= p_total_monthly_gross_saving
-            app_data.total_monthly_net_saving -= p_total_monthly_net_saving
-
+            app_data.total_monthly_saving -= p_total_monthly_balance
+           
             print('app_data deletion mode', app_data)
 
-            app_data.total_yearly_gross_saving += total_yearly_gross_saving
-            app_data.total_yearly_net_saving += total_yearly_net_saving
-            app_data.total_monthly_net_saving += total_monthly_net_saving
-            app_data.total_monthly_gross_saving +=total_monthly_gross_saving
+            app_data.total_monthly_saving += total_monthly_balance
+            
 
             print('app_data addition mode', app_data)
 
@@ -435,8 +428,9 @@ def saving_contribution_processing():
 
             newvalues = { "$set":  
                          {
-                             "total_gross_saving":total_gross_saving,
-                             "total_net_saving":total_net_saving,
+                             "total_balance":total_balance,
+                             "total_balance_xyz":total_balance_xyz,
+                             "total_monthly_balance":total_monthly_balance,
                             "finished_at":datetime.now()
                                 
                     }}
@@ -456,8 +450,9 @@ def saving_contribution_processing():
             session.rollback()
             newvalues = { "$set":  
                          {
-                             "total_gross_saving":0,
-                             "total_net_saving":0,
+                             "total_balance":0,
+                             "total_balance_xyz":0,
+                             "total_monthly_balance":0,
                             "finished_at":None
                                 
                     }}
