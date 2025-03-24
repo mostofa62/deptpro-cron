@@ -22,29 +22,34 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
     
     # Convert interest rate to decimal
     interest_rate_decimal = interest_rate / 100
+
+
+    # Set a maximum date limit (50 years from the current date)
+    limit_years = current_date + relativedelta(years=50)
     
-    while balance > 0:
-        balance = min(balance, credit_limit)
+    while balance > 0 and current_date <= limit_years:
+        
+        if credit_limit is not None:
+            balance = min(balance, credit_limit)
         
         # Calculate interest for the current balance
         interest = balance * interest_rate_decimal / 12
         
-        # Calculate the maximum payment we can make considering the monthly budget
-        payment = min(monthly_payment, monthly_budget)
+        # Calculate the maximum payment we can make this month
+        payment = min(monthly_payment, monthly_budget, balance + interest)
         
-        # Calculate snowball amount
-        snowball_amount = min(payment, balance + interest) - interest
+        # Calculate the snowball amount (portion going to principal after interest)
+        snowball_amount = payment - interest
         
         # Calculate principal payment
-        principle = snowball_amount
-        principle = min(principle, balance)
-        balance -= principle
+        principal = min(snowball_amount, balance)
+        balance -= principal
         
         if balance < 0:
             balance = 0
         
         # Calculate total payment (principle + interest)
-        total_payment = principle + interest
+        total_payment = principal + interest
         
         # Record this month's data
         amortization_schedule.append({
@@ -54,7 +59,7 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
             'total_payment': round(total_payment, 2),
             'snowball_amount': round(snowball_amount, 2),
             'interest': round(interest, 2),
-            'principle': round(principle, 2)
+            'principle': round(principal, 2)
         })
         
         # Move to the next month using relativedelta to increment by one month
