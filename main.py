@@ -13,6 +13,7 @@ from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
 
 debt_accounts_log = my_col('debt_accounts_log')
+debt_user_setting = my_col('debt_user_setting')
 
 AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
@@ -221,40 +222,109 @@ def updateDebtFreeMonth(
                             'months_to_payoff':months_to_payoff,
                             'total_payment_sum':total_payment_sum,
                             'total_interest_sum':total_interest_sum,
-                            'ammortization_at':ammortization_at
+                            #'ammortization_at':ammortization_at
                             }}
             source_collection.update_one(upsert_query, update_fields, upsert=True)
 
 
+def get_user_debt_update():
+    debt_acc_query = {
+        "ammortization_at": None,                            
+    }
 
+    debt_usersettings = debt_user_setting.find_one(
+        debt_acc_query       
+    )
+    if debt_usersettings:
+        return {
+            'user_id':debt_usersettings['user_id'],
+            'amount':debt_usersettings['user_monthly_budget']
+        }
+    
+    return None
+
+
+def distribute_amount(amount, debt_accounts):
+    remaining_amount = amount
+
+    #debt_list = []
+
+    while remaining_amount > 0:
+        for account in debt_accounts:
+            if remaining_amount == 0:
+                break
+
+            # Get the initial monthly payment of the account
+            initial_payment = account["monthly_payment"]
+
+            # Allocate up to the initial payment or the remaining amount
+            allocation = min(initial_payment, remaining_amount)
+            account["monthly_payment"] += allocation
+            remaining_amount -= allocation
+            #debt_list.append(account)
+
+    return debt_accounts
 
 
 def process_update():
-   
-    schedules = get_dept_amortization_schedule()    
-    schedule = schedules[0]
-    debtaccounts = schedules[1]
-    print('debtaccounts',debtaccounts)
-    if len(schedule) > 0 and debtaccounts!=None:
-        document_id = debtaccounts['_id']
-        dept_id = int(debtaccounts['debt_id'])
-        dynamic_data = dropAndGenerateCollection(dept_id,schedule)
-        month_debt_free = dynamic_data['month_debt_free']
-        months_to_payoff = dynamic_data['months_to_payoff']
-        total_payment_sum = dynamic_data['total_payment_sum']
-        total_interest_sum = dynamic_data['total_interest_sum']
-        if dynamic_data['month_debt_free'] != None:
-            print('month_debt_free:', month_debt_free)
-            updateDebtFreeMonth(
-                                document_id, 
-                                month_debt_free, 
-                                months_to_payoff, 
-                                total_payment_sum,
-                                total_interest_sum,
-                                dept_id
-                                )
 
-    #print('Schedule', schedule)
+    debt_update = get_user_debt_update()
+
+    if debt_update:
+        user_id = debt_update['user_id']
+        amount  = debt_update['amount']
+        query = {
+            'user_id':user_id,
+            #'ammortization_at':None
+        }
+        print('debt user settings', debt_update)
+        total_count = debt_accounts_log.count_documents(query)
+        print('found debt account', total_count)
+        if total_count > 0:
+            initail_date = datetime.now()
+            debt_accounts_list = list(debt_accounts_log.find(query))
+            debt_accounts_list = distribute_amount(amount, debt_accounts_list)
+            #print('debt account',debt_accounts_list)
+            for account in debt_accounts_list:
+                print('account', account)
+                schedule = calculate_amortization(
+                    balance=account['balance'],
+                    interest_rate=account['interest_rate'],
+                    monthly_payment=account['monthly_payment'],
+                    credit_limit=account['credit_limit'],
+                    current_date=initail_date,
+                    monthly_budget=amount
+                )
+                if len(schedule) > 0:
+                    document_id = account['_id']
+                    dept_id = int(account['debt_id'])
+                    dynamic_data = dropAndGenerateCollection(dept_id,schedule)
+                    month_debt_free = dynamic_data['month_debt_free']
+                    months_to_payoff = dynamic_data['months_to_payoff']
+                    total_payment_sum = dynamic_data['total_payment_sum']
+                    total_interest_sum = dynamic_data['total_interest_sum']
+                    if dynamic_data['month_debt_free'] != None:
+                        print('month_debt_free:', month_debt_free)
+                        updateDebtFreeMonth(
+                                            document_id, 
+                                            month_debt_free, 
+                                            months_to_payoff, 
+                                            total_payment_sum,
+                                            total_interest_sum,
+                                            dept_id
+                                            )
+
+            
+            debt_user_setting.update_one(query,{
+               '$set':{
+                  'ammortization_at':datetime.now() 
+               } 
+            })
+    else:
+        print('No debt modification found!!')
+
+
+           
 
 # if __name__ == "__main__":
 #     #process_changes()
@@ -276,17 +346,22 @@ scheduler = BackgroundScheduler()
 #scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
 
 scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
+'''
 scheduler.add_job(income_and_saving_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
 
 scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
 
 # Start the scheduler
+'''
 scheduler.start()
 
+
 # Keep the program running
+
 try:
     while True:
         time.sleep(1)
 except KeyboardInterrupt:
     scheduler.shutdown()
     print("Scheduler stopped.")
+
