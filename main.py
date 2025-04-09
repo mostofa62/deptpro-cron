@@ -346,13 +346,13 @@ scheduler = BackgroundScheduler()
 #scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
 
 scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
-'''
+
 scheduler.add_job(income_and_saving_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
 
 scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
 
 # Start the scheduler
-'''
+
 scheduler.start()
 
 
