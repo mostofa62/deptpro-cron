@@ -1,5 +1,8 @@
 from dotenv import load_dotenv
 import os
+
+import pymongo
+from sqlalchemy import func
 load_dotenv()
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
@@ -7,7 +10,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta  # This handles month increments correctly
 from dbpg import SessionLocal
 from db import my_col, mydb
-from models import DebtAccounts, UserSettings
+from models import DebtAccounts, PaymentBoost, UserSettings
 from incometransactions import income_transaction_processing
 from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
@@ -18,6 +21,8 @@ debt_user_setting = my_col('debt_user_setting')
 AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
 CALENDER_ENTRY_DURATION = int(os.getenv("CALENDER_ENTRY_DURATION",10))
+
+'''
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
     
@@ -67,8 +72,65 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
         current_date += relativedelta(months=1)
     
     return amortization_schedule
+'''
 
+def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, cashflow_amount):
+    amortization_schedule = []
 
+    # Convert interest rate to decimal
+    interest_rate_decimal = interest_rate / 100
+
+    # Set a maximum date limit (100 years from the current date)
+    limit_date = current_date.replace(year=current_date.year + 100)
+
+    while balance > 0 and current_date <= limit_date:
+        # Ensure balance doesn't exceed the credit limit
+        if credit_limit is not None:
+            balance = min(balance, credit_limit)
+
+        # Calculate interest for the current balance
+        interest = balance * interest_rate_decimal / 12
+
+        # Calculate the payment this month (principal + interest)
+        payment = monthly_payment + min(cashflow_amount, balance)
+
+        # Calculate the snowball amount (portion going to principal after interest)
+        snowball_amount = payment - interest
+
+        # If cashflow is greater than the balance, we apply it entirely to the balance
+        if cashflow_amount >= balance:
+            snowball_amount = balance  # Paying off the balance
+            balance = 0  # Debt is fully paid off
+        else:
+            balance -= snowball_amount  # Decrease balance by snowball amount
+
+        total_payment = snowball_amount + interest
+
+        if balance <0:
+            balance = 0
+
+        # Record this month's data
+        amortization_schedule.append({
+            'month': current_date.strftime("%b %Y"),
+            'month_debt_free': current_date,
+            'balance': round(balance, 2),
+            'total_payment': round(total_payment, 2),
+            'snowball_amount': round(snowball_amount, 2),
+            'interest': round(interest, 2),
+            'principal': round(snowball_amount, 2)
+        })
+
+        # Decrease cashflow for the current month after usage
+        cashflow_used = min(cashflow_amount, balance)
+        cashflow_amount -= cashflow_used       
+
+        # Manually increment the date by 1 month
+        if current_date.month == 12:
+            current_date = current_date.replace(year=current_date.year + 1, month=1)
+        else:
+            current_date = current_date.replace(month=current_date.month + 1)
+
+    return amortization_schedule, cashflow_amount
 
 # Define sorting method (for example, Debt Snowball - lowest balance first)
 def sort_debts(debts, method):
@@ -95,54 +157,6 @@ def sort_debts(debts, method):
     else:
         raise ValueError("Unknown debt payoff method")
     
-
-def get_dept_amortization_schedule():
-
-    debt_acc_query = {
-        "ammortization_at": None,                            
-    }
-
-    debtaccounts = debt_accounts_log.find_one(
-        debt_acc_query       
-        )
-
-    if debtaccounts:
-        balance = debtaccounts['balance']
-        #highest_balance = debtaccounts['highest_balance']
-        monthly_payment = debtaccounts['monthly_payment']
-        interest_rate = debtaccounts['interest_rate']
-        #monthly_interest = debtaccounts['monthly_interest']
-        credit_limit = debtaccounts['credit_limit']
-        current_date = debtaccounts['current_date']
-
-        monthly_budget = debtaccounts['user_monthly_budget']
-        
-    
-        debt = {        
-            'balance': balance,
-            'interest_rate': interest_rate,
-            'monthly_payment': monthly_payment,
-            'credit_limit': credit_limit,
-            'current_date': current_date,
-            'monthly_budget': monthly_budget
-        }
-
-        schedule = calculate_amortization(
-            balance=debt['balance'],
-            interest_rate=debt['interest_rate'],
-            monthly_payment=debt['monthly_payment'],
-            credit_limit=debt['credit_limit'],
-            current_date=debt['current_date'],
-            monthly_budget=debt['monthly_budget']
-        )
-
-            
-
-        return(schedule, debtaccounts)
-
-    
-    return ([],None)   
-
 
 
 def dropAndGenerateCollection(document_id:int,schedule):
@@ -238,32 +252,13 @@ def get_user_debt_update():
     if debt_usersettings:
         return {
             'user_id':debt_usersettings['user_id'],
-            'amount':debt_usersettings['user_monthly_budget']
+            'amount':debt_usersettings['user_monthly_budget'],
+            'debt_payoff_method':debt_usersettings['debt_payoff_method']['value']
         }
     
     return None
 
 
-def distribute_amount(amount, debt_accounts):
-    remaining_amount = amount
-
-    #debt_list = []
-
-    while remaining_amount > 0:
-        for account in debt_accounts:
-            if remaining_amount == 0:
-                break
-
-            # Get the initial monthly payment of the account
-            initial_payment = account["monthly_payment"]
-
-            # Allocate up to the initial payment or the remaining amount
-            allocation = min(initial_payment, remaining_amount)
-            account["monthly_payment"] += allocation
-            remaining_amount -= allocation
-            #debt_list.append(account)
-
-    return debt_accounts
 
 
 def process_update():
@@ -273,6 +268,8 @@ def process_update():
     if debt_update:
         user_id = debt_update['user_id']
         amount  = debt_update['amount']
+        debt_payoff_method = debt_update['debt_payoff_method']
+        
         query = {
             'user_id':user_id,
             #'ammortization_at':None
@@ -280,46 +277,103 @@ def process_update():
         print('debt user settings', debt_update)
         total_count = debt_accounts_log.count_documents(query)
         print('found debt account', total_count)
+                    
         if total_count > 0:
-            initail_date = datetime.now()
-            debt_accounts_list = list(debt_accounts_log.find(query))
-            debt_accounts_list = distribute_amount(amount, debt_accounts_list)
-            #print('debt account',debt_accounts_list)
-            for account in debt_accounts_list:
-                print('account', account)
-                schedule = calculate_amortization(
-                    balance=account['balance'],
-                    interest_rate=account['interest_rate'],
-                    monthly_payment=account['monthly_payment'],
-                    credit_limit=account['credit_limit'],
-                    current_date=initail_date,
-                    monthly_budget=amount
-                )
-                if len(schedule) > 0:
-                    document_id = account['_id']
-                    dept_id = int(account['debt_id'])
-                    dynamic_data = dropAndGenerateCollection(dept_id,schedule)
-                    month_debt_free = dynamic_data['month_debt_free']
-                    months_to_payoff = dynamic_data['months_to_payoff']
-                    total_payment_sum = dynamic_data['total_payment_sum']
-                    total_interest_sum = dynamic_data['total_interest_sum']
-                    if dynamic_data['month_debt_free'] != None:
-                        print('month_debt_free:', month_debt_free)
-                        updateDebtFreeMonth(
-                                            document_id, 
-                                            month_debt_free, 
-                                            months_to_payoff, 
-                                            total_payment_sum,
-                                            total_interest_sum,
-                                            dept_id
-                                            )
+            total_monthly_minimum = 0
+            total_payment_boost = 0
+            monthly_budget = amount
+            cashflow_amount = 0
+            with SessionLocal() as session:
+                total_monthly_minimum = session.query(
+                    func.coalesce(func.sum(DebtAccounts.monthly_payment), 0)
+                ).filter(
+                    DebtAccounts.user_id == user_id,
+                    DebtAccounts.deleted_at.is_(None)                    
+                ).scalar()
+                current_month_string = datetime.now().strftime('%b %Y')
 
+                total_payment_boost = (
+                    session.query(func.coalesce(func.sum(PaymentBoost.amount), 0))
+                    .filter(
+                        PaymentBoost.month == current_month_string,
+                        PaymentBoost.deleted_at.is_(None)
+                    )
+                    .scalar()
+                )
+
+                cashflow_amount = round((monthly_budget - total_monthly_minimum) + total_payment_boost,2)
+
+            initail_date = datetime.now()
+
+            debt_accounts_list  = []            
             
-            debt_user_setting.update_one(query,{
-               '$set':{
-                  'ammortization_at':datetime.now() 
-               } 
-            })
+            if debt_payoff_method == 3:
+                debt_accounts_list = list(debt_accounts_log.find(query).sort("custom_payoff_order", pymongo.ASCENDING))
+            
+            if debt_payoff_method == 1:
+                debt_accounts_list = list(debt_accounts_log.find(query).sort("balance", pymongo.ASCENDING))
+
+            if debt_payoff_method == 2:
+                debt_accounts_list = list(debt_accounts_log.find(query).sort("interest_rate", pymongo.DESCENDING))
+
+            if debt_payoff_method == 8:
+                debt_accounts_list = list(debt_accounts_log.aggregate([
+                {
+                    "$match": query
+                },
+                {
+                    "$addFields": {
+                        "balance_to_credit_ratio": {
+                            "$divide": [
+                                {"$ifNull": ["$balance", 0]},
+                                {"$add": [{"$ifNull": ["$credit_limit", 0]}, 1]}
+                            ]
+                        }
+                    }
+                },
+                {
+                    "$sort": {
+                        "balance_to_credit_ratio": -1  # Sort descending
+                    }
+                }
+            ]))
+
+            if len(debt_accounts_list) > 0:
+                for account in debt_accounts_list:
+                    print('account', account)
+                    schedule, cashflow_amount = calculate_amortization(
+                        balance=account['balance'],
+                        interest_rate=account['interest_rate'],
+                        monthly_payment=account['monthly_payment'],
+                        credit_limit=account['credit_limit'],
+                        current_date=initail_date,
+                        cashflow_amount=cashflow_amount
+                    )
+                    if len(schedule) > 0:
+                        document_id = account['_id']
+                        dept_id = int(account['debt_id'])
+                        dynamic_data = dropAndGenerateCollection(dept_id,schedule)
+                        month_debt_free = dynamic_data['month_debt_free']
+                        months_to_payoff = dynamic_data['months_to_payoff']
+                        total_payment_sum = dynamic_data['total_payment_sum']
+                        total_interest_sum = dynamic_data['total_interest_sum']
+                        if dynamic_data['month_debt_free'] != None:
+                            print('month_debt_free:', month_debt_free)
+                            updateDebtFreeMonth(
+                                                document_id, 
+                                                month_debt_free, 
+                                                months_to_payoff, 
+                                                total_payment_sum,
+                                                total_interest_sum,
+                                                dept_id
+                                                )
+
+                
+                debt_user_setting.update_one(query,{
+                '$set':{
+                    'ammortization_at':datetime.now() 
+                } 
+                })
     else:
         print('No debt modification found!!')
 

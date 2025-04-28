@@ -439,7 +439,7 @@ class PaymentBoost(Base):
     __tablename__ = 'payment_boosts'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False, index=True)  # Relating to the users table
+    user_id = Column(Integer, ForeignKey('users.id'),nullable=False, index=True)  # Relating to the users table
     amount = Column(Float, nullable=False)  # The payment boost amount
     pay_date_boost = Column(DateTime, nullable=False)  # The date for the boost
     comment = Column(String(255), nullable=True)  # Optional comment field
