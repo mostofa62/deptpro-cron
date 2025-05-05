@@ -94,6 +94,7 @@ def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit
         extra_payment = 0
         if is_first_month:
             extra_payment = min(cashflow_amount, balance)
+            extra_payment = min(cashflow_amount, ((balance+ interest) - monthly_payment))
             cashflow_amount -= extra_payment
         payment = monthly_payment + extra_payment
 
