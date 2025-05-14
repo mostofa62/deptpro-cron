@@ -221,7 +221,7 @@ def get_single_income(
         frequency,
         commit,
         income_id,
-        user_id  
+        user_id              
 ):
     
     delta = get_delta(frequency)    
@@ -229,7 +229,7 @@ def get_single_income(
     
     
 
-    next_pay_date = current_date + delta
+    next_pay_date = current_date + delta    
     
     
     total_gross_for_period = initial_gross_input
@@ -241,30 +241,39 @@ def get_single_income(
     total_gross_for_period = round(total_gross_for_period,2)
     total_net_for_period = round(total_net_for_period,2)
 
+    total_monthly_gross_income= 0
+    total_monthly_net_income = 0
+    total_yearly_gross_income = 0
+    total_yearly_net_income = 0 
+
     
 
-    month = current_date.strftime("%Y-%m")
-    month_word = current_date.strftime("%b, %Y")
-
-
-
-    income_transaction = {
-        'month_word':month_word,
-        'month':month,
-        'pay_date':current_date,
-        "next_pay_date":next_pay_date,
-        'gross_income':gross_input,
-        'net_income':net_input,               
-        "total_gross_for_period": total_gross_for_period,
-        'total_net_for_period':total_net_for_period,            
-        "income_id":income_id,
-        "income_boost_id":None,
-        'user_id':user_id,
-        'commit':commit,
-        "deleted_at":None,
-        "closed_at":None            
-        
+    current_datetime_now = datetime.now()  
+    
+    month = int(current_date.strftime("%Y%m"))
+    income_transaction = {                
+                #'month_word':month_word,
+                'month':month,
+                'pay_date':current_date,
+                "next_pay_date":next_pay_date,
+                'gross_income':gross_input,
+                'net_income':net_input,   
+                "total_gross_for_period": total_gross_for_period,
+                'total_net_for_period':total_net_for_period,
+                "income_id":income_id,
+                "income_boost_id":None,
+                'user_id':user_id,
+                'commit':commit,          
+                      
     }
+
+    if month == int(current_datetime_now.strftime('%Y%m')):
+        total_monthly_gross_income += gross_input
+        total_monthly_net_income += net_input
+
+    if int(month/100) == current_datetime_now.year:
+        total_yearly_gross_income += gross_input
+        total_yearly_net_income += net_input
 
 
     
@@ -272,7 +281,11 @@ def get_single_income(
         'income_transaction':income_transaction,
         'total_gross_for_period':total_gross_for_period,
         'total_net_for_period':total_net_for_period,
-        'next_pay_date':next_pay_date
+        'next_pay_date':next_pay_date,
+        'total_monthly_gross_income':total_monthly_gross_income,
+        'total_monthly_net_income':total_monthly_net_income,
+        'total_yearly_gross_income':total_yearly_gross_income,
+        'total_yearly_net_income':total_yearly_net_income, 
     })
 
     

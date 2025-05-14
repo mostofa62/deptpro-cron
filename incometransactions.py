@@ -4,7 +4,7 @@ from models import AppData, Income, IncomeBoost, IncomeMonthlyLog, IncomeTransac
 from dbpg import SessionLocal
 from db import my_col
 
-from incomeutil import generate_new_transaction_data_for_income, generate_new_transaction_data_for_income_boost, get_single_boost
+from incomeutil import generate_new_transaction_data_for_income, generate_new_transaction_data_for_income_boost, get_single_boost, get_single_income
 income_accounts_logs = my_col('income_accounts_logs')
 import argparse
 
@@ -454,6 +454,7 @@ def income_transaction_processing():
         session.close()
 
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run functions from command line")
     
@@ -466,6 +467,7 @@ def main():
     # Check if the specified function is available and run it
     if args.function == 'income_tpros':
         income_transaction_processing()
+        
     else:
         print(f"Function {args.function} not recognized!")
 
