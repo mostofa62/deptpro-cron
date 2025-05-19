@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import func, update
 from util import convertDateTostring
-from incomeutil import get_remaining_frequency_with_next, get_single_boost, get_single_income
+from incomeutil import get_single_boost, get_single_income
 from models import AppData, Income, IncomeBoost, IncomeTransaction
 from dbpg import SessionLocal
 from dateutil.relativedelta import relativedelta
