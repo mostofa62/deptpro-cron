@@ -14,7 +14,7 @@ from models import DebtAccounts, PaymentBoost, UserSettings
 from incometransactions import income_transaction_processing
 from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
-
+from incomenext import income_next_payment
 debt_accounts_log = my_col('debt_accounts_log')
 debt_user_setting = my_col('debt_user_setting')
 
@@ -394,6 +394,8 @@ scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_
 scheduler.add_job(income_and_saving_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
 
 scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
+
+scheduler.add_job(income_next_payment, 'cron', hour=0, minute=0, second=10, max_instances=1)
 
 # Start the scheduler
 

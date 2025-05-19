@@ -1,5 +1,5 @@
 import calendar
-from datetime import datetime,timedelta
+from datetime import date, datetime,timedelta
 from itertools import groupby
 from operator import itemgetter
 
@@ -248,7 +248,7 @@ def get_single_income(
 
     
 
-    current_datetime_now = datetime.now()  
+    current_datetime_now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     month = int(current_date.strftime("%Y%m"))
     income_transaction = {                
@@ -686,3 +686,4 @@ def calculate_total_income_for_sepecific_month(data, target_month, key='base_net
     total_monthly_gross_income = sum(doc[keyg] for doc in data if doc["month"] == target_month)
     total_monthly_net_income = sum(doc[key] for doc in data if doc["month"] == target_month)
     return total_monthly_net_income,total_monthly_gross_income
+
