@@ -14,7 +14,7 @@ from models import DebtAccounts, PaymentBoost, UserSettings
 from incometransactions import income_transaction_processing
 from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
-from incomenext import income_next_payment
+from incomenext import income_boost_next_payment, income_next_payment
 debt_accounts_log = my_col('debt_accounts_log')
 debt_user_setting = my_col('debt_user_setting')
 
@@ -22,6 +22,7 @@ AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
 CALENDER_ENTRY_DURATION = int(os.getenv("CALENDER_ENTRY_DURATION",10))
 INCOME_ENTRY_DURATION = int(os.getenv("INCOME_ENTRY_DURATION",10))
+INCOME_BOOST_ENTRY_DURATION = int(os.getenv("INCOME_BOOST_ENTRY_DURATION",10))
 '''
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
@@ -389,10 +390,13 @@ def load_scheduler():
     scheduler = BackgroundScheduler()
     # Schedule the query execution every 10 seconds
     #scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
+    
     scheduler.add_job(process_update, 'interval', seconds=AMORTIZATION_INTERVAL,max_instances=1)
     scheduler.add_job(income_and_saving_processing, 'interval', seconds=INCOME_INTERVAL,max_instances=1)
     scheduler.add_job(calender_entry, 'interval', minutes=CALENDER_ENTRY_DURATION,max_instances=1)
-    scheduler.add_job(income_next_payment, 'interval', seconds=INCOME_ENTRY_DURATION, max_instances=1)
+    
+    scheduler.add_job(income_next_payment, 'interval', minutes=INCOME_ENTRY_DURATION, max_instances=1)
+    scheduler.add_job(income_boost_next_payment, 'interval', minutes=INCOME_BOOST_ENTRY_DURATION, max_instances=1)
     ##scheduler.add_job(my_job, 'cron', hour=0, minute=0, second=10, max_instances=1)
     # Start the scheduler
     scheduler.start()

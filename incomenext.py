@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Integer, cast, extract, func, select, update
+from sqlalchemy import Integer, and_, cast, extract, func, or_, select, update
 from util import convertDateTostring
 from incomeutil import get_single_boost, get_single_income
 from models import AppData, Income, IncomeBoost, IncomeTransaction,IncomeTransaction as IT
@@ -7,7 +7,7 @@ from dbpg import SessionLocal
 from dateutil.relativedelta import relativedelta
 import argparse
 import os
-
+from sqlalchemy.orm import aliased
 def income_next_payment():
 
     INCOME_LIMIT = os.getenv('INCOME_LIMIT',10)
@@ -84,7 +84,7 @@ def income_next_payment():
                 Income.next_pay_date <= current_datetime_now,
                 Income.deleted_at.is_(None),
                 Income.closed_at.is_(None)
-            )
+            ).order_by(Income.next_pay_date)
         )
         #print(str(query.statement.compile(compile_kwargs={"literal_binds": True})))
 
@@ -141,7 +141,8 @@ def income_next_payment():
                 total_monthly_net_income=total_monthly_net_income,
                 total_yearly_gross_income=total_yearly_gross_income,
                 total_yearly_net_income=total_yearly_net_income,
-                next_pay_date=next_pay_date
+                next_pay_date=next_pay_date,
+                updated_at= datetime.now()
             )
             session.execute(stmt_update)
             
@@ -196,6 +197,8 @@ def income_next_payment():
         #print(result)
         
 
+IncomeAlias = aliased(Income)
+
 def income_boost_next_payment():
 
     INCOME_LIMIT = os.getenv('INCOME_LIMIT',10)
@@ -212,12 +215,14 @@ def income_boost_next_payment():
     
 
     try:
+        effective_pay_date = func.coalesce(IncomeBoost.next_pay_date_boost, IncomeBoost.pay_date_boost)
+
         monthly_gross_income_subq = (
             select(func.coalesce(func.sum(IT.gross_income), 0.0))
             .where(
                 IT.income_id == IncomeBoost.income_id,
-                IT.commit == IncomeBoost.income.commit,
-                IT.month == cast(func.to_char(IncomeBoost.next_pay_date_boost, 'YYYYMM'), Integer)
+                IT.commit == IncomeAlias.commit,
+                IT.month == cast(func.to_char( effective_pay_date , 'YYYYMM'), Integer)
             )
             .scalar_subquery()
         )
@@ -226,8 +231,8 @@ def income_boost_next_payment():
             select(func.coalesce(func.sum(IT.net_income), 0.0))
             .where(
                 IT.income_id == IncomeBoost.income_id,
-                IT.commit == IncomeBoost.income.commit,
-                IT.month == cast(func.to_char(IncomeBoost.next_pay_date_boost, 'YYYYMM'), Integer)
+                IT.commit == IncomeAlias.commit,
+                IT.month == cast(func.to_char( effective_pay_date , 'YYYYMM'), Integer)
             )
             .scalar_subquery()
         )
@@ -236,8 +241,8 @@ def income_boost_next_payment():
             select(func.coalesce(func.sum(IT.gross_income), 0.0))
             .where(
                 IT.income_id == IncomeBoost.income_id,
-                IT.commit == IncomeBoost.income.commit,
-                IT.month // 100 == func.extract("year", IncomeBoost.next_pay_date_boost)
+                IT.commit == IncomeAlias.commit,
+                IT.month // 100 == func.extract("year", effective_pay_date )
             )
             .scalar_subquery()
         )
@@ -246,36 +251,44 @@ def income_boost_next_payment():
             select(func.coalesce(func.sum(IT.net_income), 0.0))
             .where(
                 IT.income_id == IncomeBoost.income_id,
-                IT.commit == IncomeBoost.income.commit,
-                IT.month // 100 == func.extract("year", IncomeBoost.next_pay_date_boost)
+                IT.commit == IncomeAlias.commit,
+                IT.month // 100 == func.extract("year", effective_pay_date )
             )
             .scalar_subquery()
         )
 
         query = (
             session.query(
-                IncomeBoost.income_id,
+                IncomeBoost.income_id.label('income_id'),
                 IncomeBoost.id.label('income_boost_id'),
                 IncomeBoost.user_id,
-                IncomeBoost.next_pay_date_boost.label('next_pay_date'),
+                effective_pay_date.label('next_pay_date'),                
                 IncomeBoost.total_balance,               
                 IncomeBoost.income_boost,               
-                IncomeBoost.income.commit.label('commit'),
+                IncomeAlias.commit.label('commit'),
                 IncomeBoost.repeat_boost.label('repeat'),
-                IncomeBoost.income.total_gross_income,
-                IncomeBoost.income.total_net_income,
+                IncomeAlias.total_gross_income,
+                IncomeAlias.total_net_income,
                 monthly_gross_income_subq.label("p_monthly_gross_income"),
                 monthly_net_income_subq.label("p_monthly_net_income"),
                 yearly_gross_income_subq.label("p_yearly_gross_income"),
                 yearly_net_income_subq.label("p_yearly_net_income"),
             )
+            .join(IncomeAlias, IncomeAlias.id == IncomeBoost.income_id)
             .filter(
-                IncomeBoost.next_pay_date_boost <= current_datetime_now,
+                ( effective_pay_date <= current_datetime_now),
                 IncomeBoost.deleted_at.is_(None),
-                IncomeBoost.closed_at.is_(None)
-            )
+                IncomeBoost.closed_at.is_(None),
+                or_(
+                    IncomeBoost.repeat_boost["value"].as_integer() != 0,  # If not 0, don't check single_done
+                    and_(
+                        IncomeBoost.repeat_boost["value"].as_integer() == 0,
+                        IncomeBoost.single_done == 0
+                    )
+                )
+            ).order_by(effective_pay_date)
         )
-        #print(str(query.statement.compile(compile_kwargs={"literal_binds": True})))
+        print(str(query.statement.compile(compile_kwargs={"literal_binds": True})))
 
         incomes_due = query.limit(INCOME_LIMIT).all()
     except Exception as e:
@@ -288,7 +301,7 @@ def income_boost_next_payment():
     p_monthly_gross_income, p_monthly_net_income, \
     p_yearly_gross_income, p_yearly_net_income in incomes_due:
         try:
-            repeat = repeat.get('value') if repeat else None
+            repeat = repeat.get('value') if repeat and repeat.get('value') > 0 else None
             pay_date = next_pay_date                    
             contribution_breakdown_b = get_single_boost(
                     total_balance,
@@ -336,7 +349,7 @@ def income_boost_next_payment():
                 total_monthly_net_income=total_monthly_net_income,
                 total_yearly_gross_income=total_yearly_gross_income,
                 total_yearly_net_income=total_yearly_net_income,
-                next_pay_date=next_pay_date
+                updated_at= datetime.now()                
             )
             session.execute(stmt_update)
             
@@ -351,7 +364,8 @@ def income_boost_next_payment():
                 'total_monthly_net_income':total_monthly_net_income,
                 'total_yearly_gross_income':total_yearly_gross_income,
                 'total_yearly_net_income':total_yearly_net_income,
-                'closed_at': None
+                'closed_at': None,
+                'single_done':1 if repeat == None else 0
             }
 
             session.query(IncomeBoost).filter_by(id=boost_status['id']).update({
@@ -361,7 +375,8 @@ def income_boost_next_payment():
                                 'total_monthly_net_income': boost_status['total_monthly_net_income'],
                                 'total_yearly_gross_income': boost_status['total_yearly_gross_income'],
                                 'total_yearly_net_income': boost_status['total_yearly_net_income'],                        
-                                'closed_at': boost_status['closed_at']
+                                'closed_at': boost_status['closed_at'],
+                                'single_done':boost_status['single_done']
                             })
             
             session.flush()
@@ -427,7 +442,8 @@ def main():
     # Check if the specified function is available and run it
     if args.function == 'income_tpros':
         #income_transaction_processing()
-        income_next_payment()
+        #income_next_payment()
+        income_boost_next_payment()
     else:
         print(f"Function {args.function} not recognized!")
 

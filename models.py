@@ -183,6 +183,7 @@ class IncomeBoost(Base):
     total_monthly_net_income = Column(Float, nullable=True, default=0.0)
     total_yearly_gross_income = Column(Float, nullable=True, default=0.0)
     total_yearly_net_income = Column(Float, nullable=True, default=0.0)
+    single_done = Column(Integer, nullable=True, default=0)
 
     # Relationships
     user = relationship("User", backref="income_boosts", lazy="joined")
