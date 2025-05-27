@@ -15,11 +15,13 @@ from incometransactions import income_transaction_processing
 from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
 from incomenext import income_boost_next_payment, income_next_payment
+from billnext import bill_next_transaction
 debt_accounts_log = my_col('debt_accounts_log')
 debt_user_setting = my_col('debt_user_setting')
 
 AMORTIZATION_INTERVAL = int(os.getenv("AMORTIZATION_INTERVAL",10))
 INCOME_INTERVAL = int(os.getenv("INCOME_INTERVAL",10))
+BILL_INTERVAL = int(os.getenv("BILL_INTERVAL",10))
 CALENDER_ENTRY_DURATION = int(os.getenv("CALENDER_ENTRY_DURATION",10))
 INCOME_ENTRY_DURATION = int(os.getenv("INCOME_ENTRY_DURATION",10))
 INCOME_BOOST_ENTRY_DURATION = int(os.getenv("INCOME_BOOST_ENTRY_DURATION",10))
@@ -397,6 +399,7 @@ def load_scheduler():
     
     scheduler.add_job(income_next_payment, 'interval', minutes=INCOME_ENTRY_DURATION, max_instances=1)
     scheduler.add_job(income_boost_next_payment, 'interval', minutes=INCOME_BOOST_ENTRY_DURATION, max_instances=1)
+    scheduler.add_job(bill_next_transaction, 'interval', seconds=BILL_INTERVAL, max_instances=1)
     ##scheduler.add_job(my_job, 'cron', hour=0, minute=0, second=10, max_instances=1)
     # Start the scheduler
     scheduler.start()

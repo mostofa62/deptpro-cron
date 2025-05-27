@@ -289,15 +289,27 @@ class BillAccounts(Base):
     repeat_frequency = Column(Integer, nullable=True)
     reminder_days = Column(Integer, nullable=True)
     note = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    latest_transaction_id = Column(Integer, ForeignKey('bill_transactions.id', ondelete='SET NULL'), nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
-    calender_at = Column(DateTime, nullable=True)
+    admin_id = Column(Integer,nullable=True)
+    # In BillAccounts:
+    latest_transaction_id = Column(
+        Integer,
+        ForeignKey('bill_transactions.id', ondelete='SET NULL', use_alter=True, name='fk_accounts_latest_transaction', deferrable=True),
+        nullable=True
+    )
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    closed_at = Column(DateTime, nullable=True, index=True)
+    calender_at = Column(DateTime, nullable=True, index=True)
+    single_done = Column(Integer, nullable=True, default=0)
 
-    bill_type = relationship('BillType', backref='bill_accounts', lazy='joined')
+    bill_type = relationship(
+        'BillType', 
+        backref='bill_accounts', 
+        lazy='joined',
+        foreign_keys=[bill_type_id]
+        )
     user = relationship('User', backref='bill_accounts', lazy='joined')
     latest_transaction = relationship(
         'BillTransactions',
@@ -320,14 +332,24 @@ class BillTransactions(Base):
     note = Column(String(255), nullable=True)
     current_amount = Column(Float, nullable=True)
     due_date = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    bill_acc_id = Column(Integer, ForeignKey('bill_accounts.id', ondelete='SET NULL'), nullable=True)    
+    admin_id = Column(Integer,nullable=True)
+    bill_acc_id = Column(
+        Integer,
+        ForeignKey('bill_accounts.id', ondelete='SET NULL', use_alter=True, name='fk_transactions_account', deferrable=True),
+        nullable=True
+    )
     payment_status = Column(Integer, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
-    latest_payment_id = Column(Integer, ForeignKey('bill_payments.id', ondelete='SET NULL'), nullable=True)
+    latest_payment_id = Column(
+        Integer,
+        ForeignKey('bill_payments.id', ondelete='SET NULL', use_alter=True, name='fk_transactions_latest_payment', deferrable=True),
+        nullable=True
+    )
+    repeat_frequency = Column(Integer, nullable=True)
     
 
     bill_account = relationship(
@@ -338,10 +360,17 @@ class BillTransactions(Base):
     )
     user = relationship('User', backref='bill_transactions', lazy='joined')
     latest_payment = relationship(
-        'BillPayments', 
-        backref='bill_transactions', 
+        'BillPayments',
+        foreign_keys=[latest_payment_id],
         lazy='joined',
-        foreign_keys=[latest_payment_id]
+        backref='latest_transactions'
+    )
+
+    payments = relationship(
+        'BillPayments',
+        back_populates='transaction',
+        foreign_keys='BillPayments.bill_trans_id',
+        lazy='dynamic'
     )
 
     def __repr__(self):
@@ -356,18 +385,31 @@ class BillPayments(Base):
     id = Column(Integer, primary_key=True)
     amount = Column(Float, nullable=False)
     pay_date = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    admin_id = Column(Integer,nullable=True)
     bill_trans_id = Column(Integer, ForeignKey('bill_transactions.id', ondelete='SET NULL'), nullable=True)
-    bill_account_id = Column(Integer, ForeignKey('bill_accounts.id', ondelete='SET NULL'), nullable=True)
+    bill_account_id = Column(
+        Integer,
+        ForeignKey('bill_accounts.id', ondelete='SET NULL', use_alter=True, name='fk_payments_account', deferrable=True),
+        nullable=True
+    )
     deleted_at = Column(DateTime, nullable=True)
 
+    transaction = relationship(
+        'BillTransactions',
+        back_populates='payments',
+        foreign_keys=[bill_trans_id],
+        overlaps="bill_transaction"
+    )
+
+    # Optional: if you still want this alias
     bill_transaction = relationship(
-        'BillTransactions', 
-        backref='bill_payments', 
+        'BillTransactions',
+        foreign_keys=[bill_trans_id],
         lazy='joined',
-        foreign_keys=[bill_trans_id]
+        overlaps="transaction,payments"
     )
     user = relationship('User', backref='bill_payments', lazy='joined')
     bill_account = relationship(
@@ -375,7 +417,7 @@ class BillPayments(Base):
         backref='bill_payments', 
         lazy='joined',
         foreign_keys=[bill_account_id]
-    )
+    )    
 
     def __repr__(self):
         return f"<BillPayments(amount={self.amount}, bill_trans_id={self.bill_trans_id}, bill_account_id={self.bill_account_id})>"
