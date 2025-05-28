@@ -303,6 +303,7 @@ class BillAccounts(Base):
     closed_at = Column(DateTime, nullable=True, index=True)
     calender_at = Column(DateTime, nullable=True, index=True)
     single_done = Column(Integer, nullable=True, default=0)
+    auto_update = Column(Integer, nullable=True, default=0)
 
     bill_type = relationship(
         'BillType', 
@@ -331,6 +332,7 @@ class BillTransactions(Base):
     payor = Column(String(100), nullable=True)
     note = Column(String(255), nullable=True)
     current_amount = Column(Float, nullable=True)
+    pay_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)

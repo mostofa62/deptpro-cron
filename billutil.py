@@ -44,6 +44,7 @@ def generate_single_bill(
         'payor':None,
         'note':None,
         'current_amount':amount,
+        'pay_date':current_date,
         'due_date':next_pay_date,
         'created_at':datetime.now(),
         'updated_at':datetime.now(),

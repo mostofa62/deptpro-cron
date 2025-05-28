@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime
 
 from sqlalchemy import and_, or_, update
@@ -43,10 +44,11 @@ def bill_next_transaction():
                         BillAccounts.repeat_frequency == 0,
                         BillAccounts.single_done == 0
                     )
-                )
+                ),
+                BillAccounts.auto_update == 1
             ).order_by(BillAccounts.next_due_date)
         )
-       
+        print(str(query.statement.compile(compile_kwargs={"literal_binds": True})))
         bill_all = query.limit(BILL_LIMIT).all()
     except Exception as e:
         print("Query failed Income:", e)
@@ -62,6 +64,7 @@ def bill_next_transaction():
             frequency = repeat_frequency
             pay_date = next_due_date
             amount = default_amount
+            #print('FREQUENCY:', frequency)
             if frequency > 0:
 
                 bill_transaction_generate = generate_single_bill(
@@ -93,9 +96,13 @@ def bill_next_transaction():
                 )
                 session.execute(stmt_update)
                 session.commit()
+            
             else:
-                current_datetime_now = datetime.now() 
+                today = datetime.now()
+                single_done = 0
+                #print('SINGLE :', next_due_date, current_datetime_now) 
                 if next_due_date <= current_datetime_now:
+                    single_done = 1
                     current_amount += amount
                     bill_transaction = BillTransactions(
                         amount=amount,
@@ -103,33 +110,54 @@ def bill_next_transaction():
                         payor=None,
                         note=None,
                         current_amount=current_amount,
+                        pay_date = next_due_date,
                         due_date=next_due_date,
-                        created_at=current_datetime_now,
-                        updated_at=current_datetime_now,
+                        created_at=today,
+                        updated_at=today,
                         user_id=user_id,
                         admin_id=admin_id,
                         bill_acc_id=id,
-                        payment_status=0,
-                        deleted_at=None,
-                        closed_at=None,
-                        repeat_frequency=frequency,
-                        single_done =1 if frequency > 0 else 0
+                        payment_status=0,                        
+                        repeat_frequency=frequency                        
                     )
                     session.add(bill_transaction)
                     session.flush()  # Commit to get the transaction ID
-                    bill_trans_id = bill_transaction.id
+                    bill_trans_id = bill_transaction.id                    
                     stmt_update = update(BillAccounts).where(BillAccounts.id == id).values(
                         current_amount=current_amount,
                         next_due_date=next_due_date,
                         latest_transaction_id = bill_trans_id,
-                        updated_at= datetime.now()
+                        updated_at= datetime.now(),
+                        single_done =single_done 
                     )
                     session.execute(stmt_update)
                     session.commit()
+                
 
         except Exception as ex:
             print(f'Exception while preparing income ID {id}:', ex)
             session.rollback()  # discard partial data for this record
             continue
     if session:
-        session.close() 
+        session.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run functions from command line")
+    
+    # Define the command-line argument to run the function
+    parser.add_argument('function', type=str, help="Name of the function to run")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Check if the specified function is available and run it
+    if args.function == 'billnext':
+        #income_transaction_processing()
+        #income_next_payment()
+        bill_next_transaction()
+    else:
+        print(f"Function {args.function} not recognized!") 
+
+if __name__ == '__main__':
+    main()
