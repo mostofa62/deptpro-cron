@@ -399,7 +399,7 @@ def load_scheduler():
     
     scheduler.add_job(income_next_payment, 'interval', minutes=INCOME_ENTRY_DURATION, max_instances=1)
     scheduler.add_job(income_boost_next_payment, 'interval', minutes=INCOME_BOOST_ENTRY_DURATION, max_instances=1)
-    scheduler.add_job(bill_next_transaction, 'interval', seconds=BILL_INTERVAL, max_instances=1)
+    scheduler.add_job(bill_next_transaction, 'interval', minutes=BILL_INTERVAL, max_instances=1)
     ##scheduler.add_job(my_job, 'cron', hour=0, minute=0, second=10, max_instances=1)
     # Start the scheduler
     scheduler.start()
