@@ -346,3 +346,151 @@ def calculate_breakdown(initial_amount, contribution, annual_interest_rate, goal
 
 
 
+FREQUENCY_MAP = {
+    1: 365,
+    7: 52,
+    14: 26,     # every 2 weeks
+    30: 12,
+    90: 4,     # every 3 months
+    365:1
+}
+
+
+def calculate_breakdown(initial_amount, 
+                        contribution, 
+                        annual_interest_rate, 
+                        goal_amount, 
+                        start_date, 
+                        frequency, 
+                        i_contribution=0,
+                        period=0,
+                        interest_type=1,
+                        savings_strategy=2,
+                        op_type=1,
+                        initial_amount_boost=0,
+                        total_monthly_balance_xyz=0
+                        ):
+   
+    periods_per_year = FREQUENCY_MAP[frequency]
+
+    total_balance = 0
+    total_balance_xyz = 0
+    total_balance_boost = 0
+    goal_reached = None
+
+    contribution = -contribution if op_type > 1 else contribution
+    
+    
+    total_monthly_balance_boost = 0
+    
+    delta = get_delta(frequency)
+    
+    months_breakdown = []
+    balance = initial_amount #start with starting amount
+    balance_boost = initial_amount_boost
+    current_date = start_date
+        
+    interest_rate = annual_interest_rate / 100    
+    rate_per_period = interest_rate  / periods_per_year    
+
+    next_contribution_date = current_date + delta
+    progress = 0
+    inc_contri=0
+    contribution_i=0
+    contribution_i_intrs=0    
+    interest=0.0
+    
+    #less then current date
+    current_datetime_now = datetime.now()
+    is_single = 0
+
+    if current_datetime_now <= next_contribution_date:
+        is_single = 1
+
+        # Calculate next contribution date
+        next_contribution_date = current_date + delta
+                        
+        period += 1
+        #increase contribution by periodically
+        inc_contri = period * i_contribution        
+        #increase contribution end
+
+        #contribution_with_increse
+        contribution_i +=  contribution + inc_contri
+        #end contribution_with_increase
+        if interest_type > 1:
+
+            balance += contribution_i
+            balance_boost+= contribution_i
+            contribution_i_intrs = contribution_i
+            interest = (balance * rate_per_period)
+            balance += interest
+            balance_boost+= interest
+            contribution_i_intrs+=interest
+
+        else:
+
+            interest = (contribution_i * rate_per_period)
+            contribution_i_intrs = interest + contribution_i
+            balance += contribution_i_intrs
+            balance_boost+= contribution_i_intrs            
+
+        
+        # Calculate progress towards the goal
+        
+        if savings_strategy > 1:
+            progress = (balance / goal_amount) * 100
+        else:
+            progress = 100 
+
+        month = int(current_date.strftime("%Y%m"))
+
+        # Append the current breakdown data
+        months_breakdown = {
+            "period": period,
+            "month": month,            
+            "interest": interest,
+            'interest_xyz':interest,
+            "contribution": contribution,
+            "contribution_i":contribution_i,
+            "contribution_i_intrs":contribution_i_intrs,
+            'contribution_i_intrs_xyz':contribution_i_intrs,
+            "increase_contribution":i_contribution,
+            "increase_contribution_prd":inc_contri,
+            "total_balance": balance,
+            "total_balance_xyz": balance,
+            "progress": round(progress, 2),
+            "progress_xyz": round(progress, 2),
+            "contribution_date":current_date,
+            "next_contribution_date": next_contribution_date           
+        }
+
+        if month == int(current_datetime_now.strftime('%Y%m')):            
+            total_monthly_balance_xyz+= contribution_i_intrs
+            total_monthly_balance_boost+= contribution_i_intrs
+
+
+    total_balance = balance
+    total_balance_xyz = balance
+    total_balance_boost = balance_boost
+
+    if savings_strategy > 1 and balance >= goal_amount:
+        progress = round(100,2)
+        goal_reached = next_contribution_date
+        next_contribution_date = None
+    else:
+        goal_reached = None
+
+    return ({
+        'breakdown':months_breakdown,
+        'next_contribution_date':next_contribution_date,
+        'progress':math.floor(progress),
+        'total_balance':total_balance,
+        'total_balance_xyz':total_balance_xyz,
+        'goal_reached':goal_reached,
+        'period':period,
+        'is_single':is_single,
+        'total_monthly_balance_xyz':total_monthly_balance_xyz,
+        'total_balance_boost':total_balance_boost,
+        'total_monthly_balance_boost':total_monthly_balance_boost
+    })

@@ -572,6 +572,8 @@ class Saving(Base):
     commit = Column(DateTime, nullable=False, default=datetime.now())
     calender_at = Column(DateTime, nullable=True)
     total_monthly_balance = Column(Float, nullable=False, default=0)
+    financial_freedom_target = Column(Float, nullable=True, default=0)
+    current_month = Column(Integer,nullable=True)
 
     category = relationship(
         'SavingCategory', 
@@ -621,6 +623,7 @@ class SavingBoost(Base):
     next_contribution_date = Column(DateTime, nullable=True)
     total_balance = Column(Float, nullable=False, default=0)
     total_monthly_balance = Column(Float, nullable=False, default=0)
+    current_month = Column(Integer,nullable=True)
 
     saving = relationship(
         'Saving',
