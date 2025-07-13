@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Integer, and_, cast, extract, func, or_, select, update
+from savingutil import calculate_breakdown_single
 from util import convertDateTostring
 from dbpg import SessionLocal
 from dateutil.relativedelta import relativedelta
@@ -37,6 +38,8 @@ def saving_next_payment():
                 Saving.user_id,
                 Saving.next_contribution_date,
                 Saving.total_balance_xyz,
+                Saving.contribution,
+                Saving.goal_amount,
                 Saving.interest,
                 Saving.interest_type,
                 Saving.increase_contribution_by,
@@ -60,3 +63,131 @@ def saving_next_payment():
         print("Query failed Income:", e)
         session.close()
         return
+    
+    current_saving_month = int(convertDateTostring(datetime.now(),'%Y%m')) 
+    
+    for id, user_id, next_contribution_date, total_balance_xyz, contribution,goal_amount, \
+    interest, interest_type,increase_contribution_by,savings_strategy,period ,commit, repeat, \
+    p_total_monthly_balance in saving_due:
+        try:
+            starting_amount = total_balance_xyz
+            repeat = repeat.get('value') if repeat else None
+            starting_date = next_contribution_date
+            i_contribution = increase_contribution_by
+            interest_type = interest_type['value']
+            savings_strategy = savings_strategy['value']
+            total_monthly_balance = p_total_monthly_balance
+
+            contribution_breakdown = calculate_breakdown_single(
+            starting_amount,
+            contribution,
+            interest, 
+            goal_amount, 
+            starting_date,
+            repeat,
+            i_contribution,
+            period,
+            interest_type,
+            savings_strategy,
+            1,
+            0,
+            total_monthly_balance
+            )
+
+            breakdown = contribution_breakdown['breakdown']
+            total_balance = contribution_breakdown['total_balance']
+            total_balance_xyz = contribution_breakdown['total_balance_xyz']
+            progress  = contribution_breakdown['progress']
+            next_contribution_date = contribution_breakdown['next_contribution_date']
+            goal_reached = contribution_breakdown['goal_reached']
+            period = contribution_breakdown['period']
+            is_single = contribution_breakdown['is_single']
+            total_monthly_balance_xyz = contribution_breakdown['total_monthly_balance_xyz']
+
+            len_breakdown = len(breakdown)
+
+            if len_breakdown < 1:
+                continue
+
+            if next_contribution_date == None:
+                goal_reached = goal_reached if len_breakdown > 0 else None
+
+            
+            
+            contribution_data = SavingContribution(
+                    saving_id=id,                            
+                    commit=commit,
+                    user_id=user_id,
+                    **breakdown
+                )
+            session.add(contribution_data)
+
+            stmt_update = update(Saving).where(Saving.id == id).values(
+                total_balance=total_balance,
+                total_balance_xyz=total_balance_xyz,
+                progress=progress,
+                period=period,
+                total_monthly_balance=total_monthly_balance_xyz,
+                current_month=current_saving_month,
+                next_contribution_date=next_contribution_date,
+                goal_reached = goal_reached,
+                updated_at= datetime.now()
+            )
+            session.execute(stmt_update)
+            
+
+            app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
+
+            if app_data:
+                # Update the existing record
+                                    
+                app_data.current_saving_month = current_saving_month
+                
+                if app_data.current_saving_month == current_saving_month:
+                    app_data.total_monthly_saving += total_monthly_balance_xyz
+                else:
+                    app_data.total_monthly_saving =  total_monthly_balance_xyz                   
+                app_data.saving_updated_at = None
+                
+                
+            else:
+                # Insert a new record if the user doesn't exist
+                app_data = AppData(
+                    user_id=user_id,
+                    current_saving_month = current_saving_month,
+                    total_monthly_saving=total_monthly_balance_xyz,                        
+                    saving_updated_at=None
+                )
+            
+            session.add(app_data)
+            session.commit()
+
+        except Exception as ex:
+            print(f'Exception while preparing income ID {id}:', ex)
+            session.rollback()  # discard partial data for this record
+            continue
+
+    
+    if session:
+        session.close()
+
+    
+
+def main():
+    parser = argparse.ArgumentParser(description="Run functions from command line")
+    
+    # Define the command-line argument to run the function
+    parser.add_argument('function', type=str, help="Name of the function to run")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Check if the specified function is available and run it
+    if args.function == 'saving_cpros':
+        saving_next_payment()
+    else:
+        print(f"Function {args.function} not recognized!")
+
+
+if __name__ == '__main__':
+    main()

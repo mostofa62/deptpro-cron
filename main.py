@@ -3,6 +3,8 @@ import os
 
 import pymongo
 from sqlalchemy import func
+
+
 load_dotenv()
 from apscheduler.schedulers.background import BackgroundScheduler
 import time
@@ -16,6 +18,8 @@ from savingcontributions import saving_contribution_processing
 from calenderscheduler import calender_entry
 from incomenext import income_boost_next_payment, income_next_payment
 from billnext import bill_next_transaction
+from savingnext import saving_next_payment
+from cashflow import cashflow_update
 debt_accounts_log = my_col('debt_accounts_log')
 debt_user_setting = my_col('debt_user_setting')
 
@@ -25,6 +29,9 @@ BILL_INTERVAL = int(os.getenv("BILL_INTERVAL",10))
 CALENDER_ENTRY_DURATION = int(os.getenv("CALENDER_ENTRY_DURATION",10))
 INCOME_ENTRY_DURATION = int(os.getenv("INCOME_ENTRY_DURATION",10))
 INCOME_BOOST_ENTRY_DURATION = int(os.getenv("INCOME_BOOST_ENTRY_DURATION",10))
+SAVING_ENTRY_DURATION = int(os.getenv("SAVING_ENTRY_DURATION",10))
+
+CASHFLOW_ENTRY_DURATION = int(os.getenv("CASHFLOW_ENTRY_DURATION",10))
 '''
 def calculate_amortization(balance, interest_rate, monthly_payment, credit_limit, current_date, monthly_budget):
     amortization_schedule = []
@@ -400,6 +407,10 @@ def load_scheduler():
     scheduler.add_job(income_next_payment, 'interval', minutes=INCOME_ENTRY_DURATION, max_instances=1)
     scheduler.add_job(income_boost_next_payment, 'interval', minutes=INCOME_BOOST_ENTRY_DURATION, max_instances=1)
     scheduler.add_job(bill_next_transaction, 'interval', minutes=BILL_INTERVAL, max_instances=1)
+
+    scheduler.add_job(saving_next_payment, 'interval', minutes=SAVING_ENTRY_DURATION, max_instances=1)
+
+    scheduler.add_job(cashflow_update, 'interval', minutes=CASHFLOW_ENTRY_DURATION, max_instances=1)
     ##scheduler.add_job(my_job, 'cron', hour=0, minute=0, second=10, max_instances=1)
     # Start the scheduler
     scheduler.start()

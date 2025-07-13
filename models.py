@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Date, Float, Integer, String, Boolean, DateTime, ForeignKey, Index, Text, func
+from sqlalchemy import Column, Date, Float, Integer, String, Boolean, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from dbpg import Base
@@ -703,6 +703,19 @@ class SavingMonthlyLog(Base):
     def __repr__(self):
         return f"<SavingMonthlyLog(saving_id={self.saving_id}, total_monthly_balance={self.total_monthly_balance})>"
 
+
+class CashFlow(Base):
+    __tablename__ = "cashflow"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    amount = Column(Float, nullable=False, default=0.0)    
+    updated_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'month', name='uq_user_month'),
+    )
 
 
 class CalendarData(Base):

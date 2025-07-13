@@ -356,7 +356,7 @@ FREQUENCY_MAP = {
 }
 
 
-def calculate_breakdown(initial_amount, 
+def calculate_breakdown_single(initial_amount, 
                         contribution, 
                         annual_interest_rate, 
                         goal_amount, 
