@@ -10,14 +10,11 @@ def cashflow_update():
 
     print('--- CASHFLOW NEXT PAYMENT ---')
 
-    current_datetime_now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    current_datetime_now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)    
     
     print(f'--- CASHFLOW NEXT PAYMENT STARTED - {current_datetime_now} ---')
 
-    session = SessionLocal()
-
-    target_year = current_datetime_now.year
-    target_month = current_datetime_now.month
+    session = SessionLocal()    
     current_month = int(convertDateTostring(current_datetime_now,'%Y%m'))
     try:
 
@@ -41,7 +38,8 @@ def cashflow_update():
 
     for id, user_id in cashflow_list:
         try:
-            #BILL PAID 
+            #BILL PAID
+            ''' 
             monthly_paid_bill_totals = session.query(
                 func.sum(BillPayments.amount).label('monthly_paid_bill_totals')
             ).join(
@@ -53,13 +51,19 @@ def cashflow_update():
                 BillAccounts.deleted_at.is_(None),  # Make sure related account is not deleted
                 BillAccounts.closed_at.is_(None)    # Make sure related account is not closed
             ).scalar() or 0
+            '''
 
             app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
             #INCOME WITH BOOST PART
             total_monthly_net_income = 0
+            monthly_debt_boost = 0
+            monthly_paid_bill_totals=0
             if app_data:
                 total_monthly_net_income = app_data.total_monthly_net_income
-
+                if app_data.current_debt_boost_month!=None and app_data.current_debt_boost_month == current_month:
+                    monthly_debt_boost = app_data.total_monthly_debt_boost
+                if app_data.current_billing_month!=None and app_data.current_billing_month == current_month:
+                    monthly_paid_bill_totals = app_data.total_monthly_bill_paid
 
             #DEBT WITH BOOST PART
             monthly_budget = (
@@ -68,6 +72,8 @@ def cashflow_update():
                 .scalar()
             ) or 0
 
+
+            '''
             monthly_debt_boost = session.query(
                 func.sum(PaymentBoost.amount).label('monthly_debt_boost')
             ).filter(
@@ -76,6 +82,7 @@ def cashflow_update():
                 extract('month', PaymentBoost.pay_date_boost) == target_month,
                 BillAccounts.deleted_at.is_(None)            
             ).scalar() or 0
+            '''
 
             total_debt = monthly_budget  + monthly_debt_boost
 

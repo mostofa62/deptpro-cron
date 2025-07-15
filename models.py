@@ -81,6 +81,11 @@ class AppData(Base):
     saving_updated_at = Column(DateTime, nullable=True)
     total_current_gross_income = Column(Float, nullable=True, default=0.0)
     total_current_net_income = Column(Float, nullable=True, default=0.0)
+    current_saving_month = Column(Integer, nullable=True)
+    total_monthly_bill_paid = Column(Float, nullable=True, default=0.0)
+    current_billing_month = Column(Integer, nullable=True)
+    total_monthly_debt_boost = Column(Float, nullable=True, default=0.0)
+    current_debt_boost_month = Column(Integer, nullable=True)
 
     # Relationship with the user
     user = relationship("User", backref="app_data", lazy="joined")
