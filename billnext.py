@@ -7,8 +7,8 @@ from util import convertDateTostring
 from dbpg import SessionLocal
 import os
 from dateutil.relativedelta import relativedelta
-from models import BillAccounts , BillTransactions
-from billutil import generate_single_bill
+from models import AppData, BillAccounts , BillTransactions
+from billutil import generate_single_bill, get_freq_data
 def bill_next_transaction():
 
     BILL_LIMIT = os.getenv('BILL_LIMIT',10)
@@ -16,6 +16,7 @@ def bill_next_transaction():
     print('--- BILL NEXT PAYMENT ---')
 
     current_datetime_now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    current_billing_month = int(convertDateTostring(current_datetime_now,'%Y%m'))
     
     print(f'--- BILL NEXT PAYMENT STARTED - {current_datetime_now} ---')
 
@@ -63,7 +64,10 @@ def bill_next_transaction():
         try:
             frequency = repeat_frequency
             pay_date = next_due_date
+            next_pay_date_month = int(convertDateTostring(pay_date,'%Y%m'))
             amount = default_amount
+            total_monthly_unpaid_bill = 0
+            total_monthly_unpaid_billf = 0
             #print('FREQUENCY:', frequency)
             if frequency > 0:
 
@@ -80,7 +84,11 @@ def bill_next_transaction():
                 bill_transaction_list = bill_transaction_generate['bill_transaction']
                 current_amount = bill_transaction_generate['current_amount']
                 next_due_date = bill_transaction_generate['next_pay_date']
-
+                total_monthly_unpaid_bill = bill_transaction_generate['total_monthly_unpaid_bill']
+                current_next_due_month = int(convertDateTostring(next_due_date,'%Y%m'))
+                if current_billing_month == current_next_due_month:
+                    future_data = get_freq_data(next_due_date.date(),repeat_frequency,amount)
+                    total_monthly_unpaid_billf = future_data['amount']
                 
 
                 bill_transaction = BillTransactions(**bill_transaction_list)
@@ -95,6 +103,21 @@ def bill_next_transaction():
                     updated_at= datetime.now()
                 )
                 session.execute(stmt_update)
+
+                
+                if current_billing_month == next_pay_date_month:
+                    app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
+                    if app_data:
+                        # Update the existing record                    
+                        if app_data.current_billing_month_up!= None and app_data.current_billing_month_up == current_billing_month:
+                            app_data.total_monthly_bill_unpaid += total_monthly_unpaid_bill
+                            app_data.total_monthly_bill_unpaidf += total_monthly_unpaid_billf
+                        else:
+                            app_data.total_monthly_bill_unpaid =  total_monthly_unpaid_bill
+                            app_data.total_monthly_bill_unpaidf = total_monthly_unpaid_billf
+                            app_data.current_billing_month_up = current_billing_month
+                            app_data.current_billing_month_upf = current_billing_month                   
+                        session.add(app_data)
                 session.commit()
             
             else:

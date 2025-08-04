@@ -84,6 +84,10 @@ class AppData(Base):
     current_saving_month = Column(Integer, nullable=True)
     total_monthly_bill_paid = Column(Float, nullable=True, default=0.0)
     current_billing_month = Column(Integer, nullable=True)
+    total_monthly_bill_unpaid = Column(Float, nullable=True, default=0.0)
+    current_billing_month_up = Column(Integer, nullable=True)
+    total_monthly_bill_unpaidf = Column(Float, nullable=True, default=0.0)
+    current_billing_month_upf = Column(Integer, nullable=True)
     total_monthly_debt_boost = Column(Float, nullable=True, default=0.0)
     current_debt_boost_month = Column(Integer, nullable=True)
 
