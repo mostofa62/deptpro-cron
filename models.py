@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Date, Float, Integer, String, Boolean, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Column, Date, Float, Integer, String, Boolean, DateTime, ForeignKey, Index, Text, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from dbpg import Base
@@ -74,20 +74,29 @@ class AppData(Base):
     user_id = Column(Integer, ForeignKey("users.id"),unique=True, nullable=False, index=True)  # Foreign key to users table
     total_monthly_gross_income = Column(Float, nullable=True, default=0.0)
     total_monthly_net_income = Column(Float, nullable=True, default=0.0)
+    current_income_month = Column(Integer, nullable=True)
     total_yearly_gross_income = Column(Float, nullable=True, default=0.0)
     total_yearly_net_income = Column(Float, nullable=True, default=0.0)
+    total_monthly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_monthly_net_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_net_income_f = Column(Float, nullable=True, default=0.0)
+    current_income_month = Column(Integer, nullable=True)
+    current_income_year = Column(Integer, nullable=True)
     income_updated_at = Column(DateTime, nullable=True)
     total_monthly_saving = Column(Float, nullable=True, default=0.0)
     saving_updated_at = Column(DateTime, nullable=True)
     total_current_gross_income = Column(Float, nullable=True, default=0.0)
     total_current_net_income = Column(Float, nullable=True, default=0.0)
+    financial_freedom_month = Column(Integer, nullable=True)
+    financial_freedom_target = Column(BigInteger, nullable=True)
     current_saving_month = Column(Integer, nullable=True)
     total_monthly_bill_paid = Column(Float, nullable=True, default=0.0)
     current_billing_month = Column(Integer, nullable=True)
     total_monthly_bill_unpaid = Column(Float, nullable=True, default=0.0)
     current_billing_month_up = Column(Integer, nullable=True)
     total_monthly_bill_unpaidf = Column(Float, nullable=True, default=0.0)
-    current_billing_month_upf = Column(Integer, nullable=True)
+    current_billing_month_upf = Column(Integer, nullable=True)    
     total_monthly_debt_boost = Column(Float, nullable=True, default=0.0)
     current_debt_boost_month = Column(Integer, nullable=True)
 
@@ -156,6 +165,12 @@ class Income(Base):
     calender_at = Column(DateTime, nullable=True,index=True)
     deleted_at = Column(DateTime, nullable=True,index=True)
     closed_at = Column(DateTime, nullable=True,index=True)
+    current_month = Column(Integer,nullable=True)
+    current_year = Column(Integer,nullable=True)
+    total_monthly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_monthly_net_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_net_income_f = Column(Float, nullable=True, default=0.0)
 
     # Relationships
     user = relationship("User", backref="incomes", lazy="joined")
@@ -193,6 +208,12 @@ class IncomeBoost(Base):
     total_yearly_gross_income = Column(Float, nullable=True, default=0.0)
     total_yearly_net_income = Column(Float, nullable=True, default=0.0)
     single_done = Column(Integer, nullable=True, default=0)
+    current_month = Column(Integer,nullable=True)
+    current_year = Column(Integer,nullable=True)
+    total_monthly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_monthly_net_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_gross_income_f = Column(Float, nullable=True, default=0.0)
+    total_yearly_net_income_f = Column(Float, nullable=True, default=0.0)
 
     # Relationships
     user = relationship("User", backref="income_boosts", lazy="joined")
