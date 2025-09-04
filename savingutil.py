@@ -492,5 +492,6 @@ def calculate_breakdown_single(initial_amount,
         'is_single':is_single,
         'total_monthly_balance_xyz':total_monthly_balance_xyz,
         'total_balance_boost':total_balance_boost,
-        'total_monthly_balance_boost':total_monthly_balance_boost
+        'total_monthly_balance_boost':total_monthly_balance_boost,
+        'contribution_i_intrs':contribution_i_intrs
     })

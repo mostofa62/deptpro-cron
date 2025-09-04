@@ -21,7 +21,7 @@ def saving_next_payment():
     session = SessionLocal()
 
     try:
-
+        '''
         monthly_contribution_subq = (
             select(func.coalesce(func.sum(SC.contribution_i_intrs), 0.0))
             .where(
@@ -31,6 +31,7 @@ def saving_next_payment():
             )
             .scalar_subquery()
         )
+        '''
 
         query = (
             session.query(
@@ -47,7 +48,9 @@ def saving_next_payment():
                 Saving.period,               
                 Saving.commit,
                 Saving.repeat,
-                monthly_contribution_subq.label("p_total_monthly_balance"),
+                Saving.total_monthly_balance,
+                Saving.total_monthly_balance_f
+                #monthly_contribution_subq.label("p_total_monthly_balance"),
                 
             )
             .filter(
@@ -64,11 +67,12 @@ def saving_next_payment():
         session.close()
         return
     
-    current_saving_month = int(convertDateTostring(datetime.now(),'%Y%m')) 
+    current_saving_month = int(convertDateTostring(datetime.now(),'%Y%m'))
+    current_running_month = current_saving_month 
     
     for id, user_id, next_contribution_date, total_balance_xyz, contribution,goal_amount, \
     interest, interest_type,increase_contribution_by,savings_strategy,period ,commit, repeat, \
-    p_total_monthly_balance in saving_due:
+    total_monthly_balance, total_monthly_balance_f in saving_due:
         try:
             starting_amount = total_balance_xyz
             repeat = repeat.get('value') if repeat else None
@@ -76,7 +80,6 @@ def saving_next_payment():
             i_contribution = increase_contribution_by
             interest_type = interest_type['value']
             savings_strategy = savings_strategy['value']
-            total_monthly_balance = p_total_monthly_balance
 
             contribution_breakdown = calculate_breakdown_single(
             starting_amount,
@@ -103,6 +106,7 @@ def saving_next_payment():
             period = contribution_breakdown['period']
             is_single = contribution_breakdown['is_single']
             total_monthly_balance_xyz = contribution_breakdown['total_monthly_balance_xyz']
+            contribution_i_intrs = contribution_breakdown['contribution_i_intrs']
 
             len_breakdown = len(breakdown)
 
@@ -111,6 +115,13 @@ def saving_next_payment():
 
             if next_contribution_date == None:
                 goal_reached = goal_reached if len_breakdown > 0 else None
+
+            
+            if next_contribution_date!=None:
+                current_running_month = int(convertDateTostring(next_contribution_date,'%Y%m'))
+                if current_running_month == current_saving_month:
+                    total_monthly_balance_f -=contribution_i_intrs
+
 
             
             
@@ -128,6 +139,7 @@ def saving_next_payment():
                 progress=progress,
                 period=period,
                 total_monthly_balance=total_monthly_balance_xyz,
+                total_monthly_balance_f=total_monthly_balance_f,
                 current_month=current_saving_month,
                 next_contribution_date=next_contribution_date,
                 goal_reached = goal_reached,
@@ -145,8 +157,10 @@ def saving_next_payment():
                 
                 if app_data.current_saving_month == current_saving_month:
                     app_data.total_monthly_saving += total_monthly_balance_xyz
+                    app_data.total_monthly_saving_f -= contribution_i_intrs
                 else:
-                    app_data.total_monthly_saving =  total_monthly_balance_xyz                   
+                    app_data.total_monthly_saving =  total_monthly_balance_xyz 
+                    app_data.total_monthly_saving_f = 0                  
                 app_data.saving_updated_at = None
                 
                 
@@ -155,7 +169,8 @@ def saving_next_payment():
                 app_data = AppData(
                     user_id=user_id,
                     current_saving_month = current_saving_month,
-                    total_monthly_saving=total_monthly_balance_xyz,                        
+                    total_monthly_saving=total_monthly_balance_xyz,
+                    total_monthly_saving_f=total_monthly_balance_f,                        
                     saving_updated_at=None
                 )
             

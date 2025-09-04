@@ -207,8 +207,8 @@ def income_next_payment():
                     else:
                         app_data.total_monthly_gross_income = monthly_gross_income
                         app_data.total_monthly_net_income = monthly_net_income
-                        app_data.total_monthly_gross_income_f = monthly_gross_income
-                        app_data.total_monthly_net_income_f = monthly_net_income
+                        app_data.total_monthly_gross_income_f = 0
+                        app_data.total_monthly_net_income_f = 0
                         app_data.current_income_month = current_running_month
                 if current_running_year == current_year: 
                     if app_data.current_income_year !=None and app_data.current_income_year == current_running_year:
@@ -280,12 +280,13 @@ def income_boost_next_payment():
 
     session = SessionLocal()
     
-
+    current_month = int(convertDateTostring(current_datetime_now,'%Y%m'))
+    current_year = int(current_month/100)
     
 
     try:
         effective_pay_date = func.coalesce(IncomeBoost.next_pay_date_boost, IncomeBoost.pay_date_boost)
-
+        '''
         monthly_gross_income_subq = (
             select(func.coalesce(func.sum(IT.gross_income), 0.0))
             .where(
@@ -325,6 +326,7 @@ def income_boost_next_payment():
             )
             .scalar_subquery()
         )
+        '''
 
         query = (
             session.query(
@@ -338,10 +340,26 @@ def income_boost_next_payment():
                 IncomeBoost.repeat_boost.label('repeat'),
                 IncomeAlias.total_gross_income,
                 IncomeAlias.total_net_income,
-                monthly_gross_income_subq.label("p_monthly_gross_income"),
-                monthly_net_income_subq.label("p_monthly_net_income"),
-                yearly_gross_income_subq.label("p_yearly_gross_income"),
-                yearly_net_income_subq.label("p_yearly_net_income"),
+                IncomeAlias.total_monthly_gross_income.label("p_monthly_gross_income"),
+                IncomeAlias.total_monthly_net_income.label("p_monthly_net_income"),
+                IncomeAlias.total_yearly_gross_income.label("p_yearly_gross_income"),
+                IncomeAlias.total_yearly_net_income.label("p_yearly_net_income"),
+                IncomeAlias.total_monthly_gross_income_f.label("p_monthly_gross_income_f"),
+                IncomeAlias.total_monthly_net_income_f.label("p_monthly_net_income_f"),
+                IncomeAlias.total_yearly_gross_income_f.label("p_yearly_gross_income_f"),
+                IncomeAlias.total_yearly_net_income_f.label("p_yearly_net_income_f"),
+                #monthly_gross_income_subq.label("p_monthly_gross_income"),
+                #monthly_net_income_subq.label("p_monthly_net_income"),
+                #yearly_gross_income_subq.label("p_yearly_gross_income"),
+                #yearly_net_income_subq.label("p_yearly_net_income"),
+                IncomeBoost.total_monthly_gross_income,
+                IncomeBoost.total_monthly_net_income,
+                IncomeBoost.total_yearly_gross_income,
+                IncomeBoost.total_yearly_net_income,
+                IncomeBoost.total_monthly_gross_income_f,
+                IncomeBoost.total_monthly_net_income_f,
+                IncomeBoost.total_yearly_gross_income_f,
+                IncomeBoost.total_yearly_net_income_f
             )
             .join(IncomeAlias, IncomeAlias.id == IncomeBoost.income_id)
             .filter(
@@ -367,8 +385,12 @@ def income_boost_next_payment():
     
     for income_id, income_boost_id, user_id, next_pay_date, total_balance,\
     income_boost, commit, repeat,total_gross_income, total_net_income, \
-    p_monthly_gross_income, p_monthly_net_income, \
-    p_yearly_gross_income, p_yearly_net_income in incomes_due:
+    p_monthly_gross_income, p_monthly_net_income, p_yearly_gross_income, p_yearly_net_income, \
+    p_monthly_gross_income_f, p_monthly_net_income_f, p_yearly_gross_income_f, p_yearly_net_income_f, \
+    total_monthly_gross_income, total_monthly_net_income, \
+    total_yearly_gross_income, total_yearly_net_income, \
+    total_monthly_gross_income_f, total_monthly_net_income_f, \
+    total_yearly_gross_income_f,total_yearly_net_income_f in incomes_due:
         try:
             repeat = repeat.get('value') if repeat and repeat.get('value') > 0 else None
             pay_date = next_pay_date                    
@@ -386,6 +408,8 @@ def income_boost_next_payment():
             total_net_income = contribution_breakdown_b['total_net_for_period']
             next_pay_date = contribution_breakdown_b['next_pay_date']        
             
+            current_running_month = int(convertDateTostring(next_pay_date,'%Y%m'))
+            current_running_year = int(current_running_month / 100)
 
             income_transaction_list = {
                                 'income_id':income_id,
@@ -403,21 +427,47 @@ def income_boost_next_payment():
             yearly_net_income =contribution_breakdown_b['total_yearly_net_income']            
 
             
-            total_yearly_gross_income = p_yearly_gross_income + yearly_gross_income
-            total_yearly_net_income = p_yearly_net_income + yearly_net_income                        
-            total_monthly_gross_income = p_monthly_gross_income + monthly_gross_income
-            total_monthly_net_income = p_monthly_net_income + monthly_net_income
+            #total_yearly_gross_income = p_yearly_gross_income + yearly_gross_income
+            #total_yearly_net_income = p_yearly_net_income + yearly_net_income                        
+            #total_monthly_gross_income = p_monthly_gross_income + monthly_gross_income
+            #total_monthly_net_income = p_monthly_net_income + monthly_net_income
             
-           
+            if current_running_year == current_year:
+
+                p_yearly_gross_income += yearly_gross_income
+                p_yearly_net_income += yearly_net_income
+                p_yearly_gross_income_f -= yearly_gross_income
+                p_yearly_net_income_f -= yearly_net_income
+                
+                total_yearly_gross_income += yearly_gross_income
+                total_yearly_net_income += yearly_net_income
+                total_yearly_gross_income_f -= yearly_gross_income
+                total_yearly_net_income_f -= yearly_net_income
+
+            if current_running_month == current_month and repeat < 30:
+
+                p_monthly_gross_income += monthly_gross_income
+                p_monthly_net_income += monthly_net_income
+                p_monthly_gross_income_f -= monthly_gross_income
+                p_monthly_net_income_f -= monthly_net_income
+
+                total_monthly_gross_income += monthly_gross_income
+                total_monthly_net_income += monthly_net_income
+                total_monthly_gross_income_f -= monthly_gross_income
+                total_monthly_net_income_f -= monthly_net_income
            
                     
             stmt_update = update(Income).where(Income.id == income_id).values(
                 total_gross_income=total_gross_income,
                 total_net_income=total_net_income,
-                total_monthly_gross_income=total_monthly_gross_income,
-                total_monthly_net_income=total_monthly_net_income,
-                total_yearly_gross_income=total_yearly_gross_income,
-                total_yearly_net_income=total_yearly_net_income,
+                total_monthly_gross_income= p_monthly_gross_income,
+                total_monthly_net_income = p_monthly_net_income,
+                total_monthly_gross_income_f = p_monthly_gross_income_f,
+                total_monthly_net_income_f = p_monthly_net_income_f,
+                total_yearly_gross_income=p_yearly_gross_income,
+                total_yearly_net_income=p_yearly_net_income,
+                total_yearly_gross_income_f = p_yearly_gross_income_f,
+                total_yearly_net_income_f = p_yearly_net_income_f,
                 updated_at= datetime.now()                
             )
             session.execute(stmt_update)
@@ -433,6 +483,10 @@ def income_boost_next_payment():
                 'total_monthly_net_income':total_monthly_net_income,
                 'total_yearly_gross_income':total_yearly_gross_income,
                 'total_yearly_net_income':total_yearly_net_income,
+                'total_monthly_gross_income_f':total_monthly_gross_income_f,
+                'total_monthly_net_income_f':total_monthly_net_income_f,
+                'total_yearly_gross_income_f':total_yearly_gross_income_f,
+                'total_yearly_net_income_f':total_yearly_net_income_f,
                 'closed_at': None,
                 'single_done':1 if repeat == None else 0
             }
@@ -443,13 +497,17 @@ def income_boost_next_payment():
                                 'total_monthly_gross_income': boost_status['total_monthly_gross_income'],
                                 'total_monthly_net_income': boost_status['total_monthly_net_income'],
                                 'total_yearly_gross_income': boost_status['total_yearly_gross_income'],
-                                'total_yearly_net_income': boost_status['total_yearly_net_income'],                        
+                                'total_yearly_net_income': boost_status['total_yearly_net_income'],
+                                'total_monthly_gross_income_f':boost_status['total_monthly_gross_income_f'],
+                                'total_monthly_net_income_f':boost_status['total_monthly_net_income_f'],
+                                'total_yearly_gross_income_f':boost_status['total_yearly_gross_income_f'],
+                                'total_yearly_net_income_f':boost_status['total_yearly_net_income_f'],                        
                                 'closed_at': boost_status['closed_at'],
                                 'single_done':boost_status['single_done']
                             })
             
             session.flush()
-
+            '''
             income_result = (
                 session.query(
                     func.coalesce(func.sum(Income.total_monthly_net_income), 0.0),
@@ -472,16 +530,62 @@ def income_boost_next_payment():
                 total_yearly_net
             ) = income_result
 
+            '''
+            app_data = session.query(AppData).filter(AppData.user_id == user_id).first()
+            if app_data:
+                if current_running_month == current_month:
+                    if app_data.current_income_month !=None and app_data.current_income_month == current_running_month:
+                        app_data.total_monthly_gross_income += monthly_gross_income
+                        app_data.total_monthly_net_income += monthly_net_income
+                        app_data.total_monthly_gross_income_f -= monthly_gross_income
+                        app_data.total_monthly_net_income_f -= monthly_net_income
+                    else:
+                        app_data.total_monthly_gross_income = monthly_gross_income
+                        app_data.total_monthly_net_income = monthly_net_income
+                        app_data.total_monthly_gross_income_f = 0
+                        app_data.total_monthly_net_income_f = 0
+                        app_data.current_income_month = current_running_month
+                if current_running_year == current_year: 
+                    if app_data.current_income_year !=None and app_data.current_income_year == current_running_year:
+                        app_data.total_yearly_gross_income += yearly_gross_income
+                        app_data.total_yearly_net_income += yearly_net_income
+                        app_data.total_yearly_gross_income_f -= yearly_gross_income
+                        app_data.total_yearly_net_income_f -= yearly_net_income
+                    else:
+                        app_data.total_yearly_gross_income = yearly_gross_income
+                        app_data.total_yearly_net_income = yearly_net_income
+                        app_data.total_yearly_gross_income_f = yearly_gross_income
+                        app_data.total_yearly_net_income_f = yearly_net_income
+                        app_data.current_income_year = current_running_year
+                
+                app_data.income_updated_at = None
+                session.add(app_data)
+            
+            cashflow_data = session.query(CashFlow).filter(
+                        CashFlow.user_id == user_id,
+                        CashFlow.month == current_month
+                    ).first()
+            if not cashflow_data:
+                cashflow_data = CashFlow(
+                    user_id = user_id,
+                    amount = 0,
+                    month = current_month,
+                    updated_at = None
+                )
+            else:
+                cashflow_data.updated_at = None
+                
+            session.add(cashflow_data)
 
-            stmt_update = update(AppData).where(AppData.user_id == user_id).values(
+            # stmt_update = update(AppData).where(AppData.user_id == user_id).values(
                
-                total_monthly_gross_income=total_monthly_gross,
-                total_monthly_net_income=total_monthly_net,
-                total_yearly_gross_income=total_yearly_gross,
-                total_yearly_net_income=total_yearly_net,
-                income_updated_at=None
-            )
-            session.execute(stmt_update)
+            #     total_monthly_gross_income=total_monthly_gross,
+            #     total_monthly_net_income=total_monthly_net,
+            #     total_yearly_gross_income=total_yearly_gross,
+            #     total_yearly_net_income=total_yearly_net,
+            #     income_updated_at=None
+            # )
+            # session.execute(stmt_update)
             session.commit()
 
         except Exception as ex:
